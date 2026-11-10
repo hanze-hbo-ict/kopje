@@ -135,3 +135,20 @@ edits are debounced (400 ms), file and UI operations save immediately, and it fa
 to memory on any storage error. File operations and the main-class picker are locked
 while a program runs; editing is allowed, because each run works on a snapshot of the
 files.
+
+## ADR-8 — File I/O: recompile `sun.nio.fs` for Emscripten (F1)
+
+JavaBox runs the **macOS** class library on natives compiled for Emscripten.
+`sun.nio.fs.UnixConstants` is generated per target from C headers, and its values are
+compile-time constants inlined into 14 `sun.nio.fs` classes. 37 of its 60 values differ
+from Emscripten's: `O_CREAT` is 512 on macOS (`O_TRUNC` on Emscripten), and every errno
+differs (Emscripten uses WASI numbering, e.g. `ENOENT` 44). As a result NIO opened files
+with the wrong flags and misread errors. `scripts/build-nio-patch.sh` generates
+`UnixConstants` from the pinned OpenJDK template with Emscripten's preprocessor (like
+OpenJDK's `GensrcMisc`), recompiles the whole `sun.nio.fs` package of the same revision
+against it, and makes the two `BsdFileSystem` copy paths that need unlinked macOS natives
+(`clonefile`, `fcopyfile`) report "unsupported", so the portable buffered copy is used.
+The patch ships at `/opt/jdk/patch/java.base` and is loaded with `--patch-module`.
+A Linux JDK's classes were considered and rejected: errno values still differ, the
+aarch64 `O_*` flags differ too, and Linux classes call other unlinked natives
+(`LinuxNativeDispatcher`, `copy_file_range`, epoll; `FileDispatcherImpl.<clinit>`).

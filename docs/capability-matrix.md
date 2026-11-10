@@ -10,21 +10,22 @@ source build (`java.base, java.logging, jdk.compiler`), which is what we ship. T
 |---|---|---|---|
 | stdout / stderr | allowed | per-byte devices, boot noise filtered, 1 MB cap → run torn down | slice spec: output-limit test |
 | stdin | allowed | MEMFS append file, driver polling | slice spec: sequential reads |
-| Outbound TCP (`java.net.Socket`) | **denied** (unsupported) | (1) libnet not linked → `UnsatisfiedLinkError: InetAddress.init()`; (2) CSP `connect-src 'self'` blocks any WebSocket/fetch egress from the page and runtime | probe `socket`; `security.spec.mjs` (fetch to another origin blocked). SOCKFS is still linked until N1 removes it |
+| Outbound TCP (`java.net.Socket`) | **denied** (unsupported) | (1) libnet not linked → `UnsatisfiedLinkError: InetAddress.init()`; (2) CSP `connect-src 'self'` blocks any WebSocket/fetch egress from the page and runtime | probe `socket`; `security.spec.mjs` (fetch to another origin blocked). (3) N1: socket syscalls return `EACCES` and SOCKFS/WebSocket is not linked (build check in `build-runtime-source.sh`) |
 | `HttpURLConnection` | **denied** | `ExceptionInInitializerError` in `NioSocketImpl.<clinit>` | probe `http` |
 | DNS | **denied** | same as TCP | probe `dns` |
 | Read host/real filesystem (`/etc/passwd`) | **unsupported** | only MEMFS exists (`/tmp /home /dev /proc /root /work /opt`) | probe `fileOutside` |
 | Read runtime files (`/opt/jdk/**` via `..`) | allowed | per-run MEMFS, destroyed with the iframe | probe `fileTraversal`; harmless, no user data in MEMFS |
-| Write files (NIO `Files.writeString` to `/tmp`) | **fails (compat gap)** | upstream MEMFS/NIO issue | probe `fileWrite`; file exercises will need a fix or `java.io` (unverified) |
+| Read/write files in MEMFS (`java.io`, `java.nio.file`) | **allowed** (ephemeral per run) | MEMFS in the runtime iframe; `sun.nio.fs` patched for Emscripten constants (F1) | `fileio.spec.mjs` (create, append, read, list, walk, copy, move, delete, attributes, temp files, Unicode names, correct exception types) |
+| `Files.getFileStore`, `Files.probeContentType` | **unsupported** | call macOS-only natives that are not linked → `UnsatisfiedLinkError` | — |
 | `ProcessBuilder` / `Runtime.exec` | **denied** | `posix_spawn` → ENOSYS | probes `process`, `exec` |
 | `System.loadLibrary` / `System.load` | **denied** | no dynamic loader; static symbol table only | probes `loadLibrary`, `load` |
 | IDE `sessionStorage` from student code | unsupported (no Java→JS bridge) | same-origin iframe; no eval-like import | static import audit. Phase 5: separate origin |
 | IndexedDB / localStorage / OPFS from runtime | unsupported | not linked | static grep of glue |
 | `System.exit` | allowed: ends the run only | ADR-6 + iframe teardown | slice spec: exit code 3 then clean run |
 | CPU time | bounded by wall clock (120 s, excluding stdin wait) | engine timer + teardown | not a CPU quota |
-| Memory | bounded: 512 MB WASM max, `-Xmx128m` | link flag, JVM | high-water mark not measured |
+| Memory | bounded: 512 MB WASM max, `-Xmx96m`, code cache 8 MB, metaspace 64 MB | link flags, `jvm-main.c` | `memory.spec.mjs`: ~232 MB heap per runtime; `OutOfMemoryError` is a normal program error |
 | Threads in student code | unverified / out of scope | pool of 16 pthreads | — |
-| Doom graphics/audio/input natives | **present in the `.wasm`** (from `jvm-main.c`), unreachable: no Doom classes and no `java.desktop` in the trimmed image | removing them needs a JavaBox fork | — |
+| Doom graphics/audio/input natives | **removed** | own `runtime/native/jvm-main.c` (N1); build fails if Doom/audio symbols are present | `build-runtime-source.sh` checks |
 | Spoofing driver control events | **allowed (residual)** | — | affects own console only |
 | Code/classes/JVM options chosen by URL parameters | **denied** | runtime host uses fixed same-origin paths; only `outputCap` (clamped) is read | `security.spec.mjs` S1 |
 | Framing by other sites | **denied** | CSP `frame-ancestors 'self'`, `X-Frame-Options: SAMEORIGIN` | `security.spec.mjs` S2/S7 |

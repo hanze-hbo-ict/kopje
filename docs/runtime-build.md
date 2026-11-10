@@ -23,8 +23,14 @@ hand):
    `java.base,jdk.compiler,java.logging`; `--modules full` = upstream's 25-module list.
    Deletes `ct.sym` (only needed for `javac --release`), host natives, `jspawnhelper`,
    `shaders.metallib`; creates the placeholder `.so` files the static symbol table needs.
-5. Runs upstream `link-direct-wasm.sh` without `--with-doom`; writes `BUILD_INFO` with all
-   revisions and the jlink JDK.
+5. Builds `sun.nio.fs` for Emscripten (`scripts/build-nio-patch.sh`, ADR-8) into
+   `/opt/jdk/patch/java.base`.
+6. **Our link step** instead of upstream `link-direct-wasm.sh` (PLAN.md N1): our
+   `runtime/native/jvm-main.c` (no Doom/audio/AWT natives, race-free stdin ring, JVM options
+   incl. `--patch-module` and the E6 memory settings) and `runtime/native/no-sockets.js`
+   (socket syscalls fail; SOCKFS not linked). Initial memory 128 MB, pthread pool 8
+   (`JAVAEDIT_INITIAL_MEMORY_MB`, `JAVAEDIT_PTHREAD_POOL` override). The build fails if Doom
+   symbols or a WebSocket client end up in the output. Writes `BUILD_INFO`.
 
 | Runtime | `.wasm` | `.data` | Boot → ready (Chromium) |
 |---|---:|---:|---:|
@@ -37,6 +43,5 @@ hand):
 `runtime.json` with SHA-256s) and compiles the driver into `public/runtime/driver/`. It
 prefers `$RUNTIME_DIR`, then `~/javaedit-build/out-minimal`, then `runtime-prebuilt/`.
 
-Not yet done (would require forking JavaBox): removing the Doom/AWT native stubs from
-`jvm-main.c`, fixing the stdin futex race and `available()` upstream, overriding socket
-syscalls.
+On every JavaBox bump, diff `runtime/native/jvm-main.c` against upstream
+`build/jvm-main.c`, and our link command against upstream `build/link-direct-wasm.sh`.

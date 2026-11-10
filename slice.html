@@ -51,7 +51,8 @@ public class Calculator {
     const $ = (id) => document.getElementById(id);
     const out = $('out'), status = $('status');
     const append = (text, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = text; out.append(s); };
-    const engine = new JavaBoxEngine();
+    // ?prewarm=0 exercises the low-memory path (no spare runtime).
+    const engine = new JavaBoxEngine(new URLSearchParams(location.search).get('prewarm') === '0' ? { prewarm: false } : {});
     window.engine = engine;
     window.events = [];
     const t0 = performance.now();

@@ -19,12 +19,18 @@ export interface EngineOptions {
   prewarm: boolean;
 }
 
+/** E6: one runtime is ~400 MB resident; on small devices don't keep a second one ready. */
+function lowMemoryDevice(): boolean {
+  const gb = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  return typeof gb === 'number' && gb <= 4;
+}
+
 const DEFAULTS: EngineOptions = {
   runtimeUrl: new URL('runtime/host/runtime.html', document.baseURI).href,
   bootTimeoutMs: 120_000,
   runTimeoutMs: 120_000,
   outputCap: 1_000_000,
-  prewarm: true,
+  prewarm: !lowMemoryDevice(),
 };
 
 const TERMINAL_ERRORS = new Set(['abort', 'boot', 'fatal', 'not-isolated']);
@@ -97,6 +103,8 @@ interface ActiveRun {
 
 export class JavaBoxEngine implements JavaEngine {
   private readonly opts: EngineOptions;
+  /** Whether a spare runtime is kept ready after each run (false on low-memory devices). */
+  get prewarming() { return this.opts.prewarm; }
   private spare: RuntimeContext | null = null;
   private active: ActiveRun | null = null;
   private disposed = false;
@@ -115,7 +123,11 @@ export class JavaBoxEngine implements JavaEngine {
   private ensureSpare() {
     if (this.disposed || this.spare) return;
     const ctx = new RuntimeContext(this.opts, (ev) => { if (ev.kind === 'log') console.debug('[runtime]', ev.message); });
-    ctx.ready.catch(() => { if (this.spare === ctx) { ctx.destroy(); this.spare = null; } });
+    ctx.ready.catch(() => {
+      // A runtime that fails to boot (e.g. memory allocation) stops pre-booting for this session.
+      this.opts.prewarm = false;
+      if (this.spare === ctx) { ctx.destroy(); this.spare = null; }
+    });
     this.spare = ctx;
   }
 

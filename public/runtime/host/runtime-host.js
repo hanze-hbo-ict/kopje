@@ -125,6 +125,9 @@ addEventListener('message', (e) => {
     enqueueStdin(encoder.encode(m.text));
   } else if (m.type === 'eof' && started) {
     enqueueStdin([EOF_BYTE]);
+  } else if (m.type === 'stats') {
+    // Diagnostics: current WASM heap size (used by tests/e2e/memory.spec.mjs).
+    post({ kind: 'stats', heapBytes: Module.HEAPU8.length });
   }
 });
 
@@ -157,13 +160,14 @@ async function boot() {
       // Create the file only. Opening a stream here would take fd 0: preRun runs
       // before FS.init() creates the standard streams, shifting stdout/stderr.
       FS.writeFile('/work/stdin', new Uint8Array(0));
-      // The prebuilt ignores Module.arguments, so the class path cannot be changed.
-      // Instead hold main() back with a run dependency until the preload package has
-      // populated /opt/javabox, then overwrite upstream's CompileServer*.class with
-      // ours and drop Doom from the class path (ADR-1, revised).
+      // Install the driver as /opt/javabox/CompileServer*.class once the preload package
+      // has populated the filesystem; main() is held back with a run dependency until then.
+      // javaedit's runtime build preloads only /opt/jdk; the upstream prebuilt also ships
+      // /opt/javabox (its own CompileServer and Doom), which is removed first.
       M.addRunDependency('javaedit-driver');
       const install = () => {
-        if (!FS.analyzePath('/opt/javabox/CompileServer.class').exists) { setTimeout(install, 2); return; }
+        if (!FS.analyzePath('/opt/jdk/lib/modules').exists) { setTimeout(install, 2); return; }
+        FS.mkdirTree('/opt/javabox');
         for (const name of FS.readdir('/opt/javabox')) {
           if (name.startsWith('CompileServer') || /^(doom\.jar|freedoom1\.wad|doom\.cfg)$/.test(name)) FS.unlink('/opt/javabox/' + name);
         }

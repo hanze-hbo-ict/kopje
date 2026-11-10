@@ -8,9 +8,8 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
   iframe. Isolation rests on (a) no Java→JavaScript bridge in the runtime's host imports,
   (b) libnet not being linked, and (c) per-run teardown. A same-origin iframe is a
   termination boundary, **not** a security-origin boundary (Phase 5: separate origin).
-- **SOCKFS is still linked.** Java can't reach it (`InetAddress.<clinit>` fails), and the CSP
-  `connect-src 'self'` blocks WebSocket egress at the browser. Removing SOCKFS at link time
-  is planned (PLAN.md N1).
+- **No socket layer.** Java networking fails (`InetAddress.<clinit>`), socket syscalls return
+  `EACCES` and SOCKFS is not linked (N1); the CSP `connect-src 'self'` is a second layer.
 - **Headers are part of the security model.** The CSP, COOP/COEP and framing headers come
   from `security-headers.mjs`; a deployment must serve `dist/_headers` (or equivalent). A host
   that drops them breaks Java (no `SharedArrayBuffer`) and removes the CSP.
@@ -22,9 +21,12 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
 
 ## Java compatibility
 
-- **NIO file writes fail** (`Files.writeString("/tmp/x.txt")` → `FileSystemException: No
-  such file or directory`) — an upstream MEMFS/NIO issue; `java.io` file APIs are
-  unverified. File-I/O assignments are not supported yet.
+- **File I/O works on an ephemeral in-memory filesystem** (`java.io` and `java.nio.file`,
+  `fileio.spec.mjs`). Files exist only during one run; the project's `.java` files are not
+  visible to the program as files (they live in `/work/src`, but the working directory is
+  `/root`). `Files.getFileStore` and `Files.probeContentType` throw `UnsatisfiedLinkError`
+  (macOS-only natives). The class library is the macOS one with `sun.nio.fs` recompiled
+  against Emscripten's constants (`scripts/build-nio-patch.sh`, ADR-8).
 - **Minimal class library:** `java.base`, `java.logging`, `jdk.compiler` (+ `java.compiler`,
   `jdk.internal.opt`, `jdk.zipfs`). No `java.sql`, `java.desktop` (AWT/Swing),
   `java.net.http`, `java.xml`. Add modules only after a compatibility test needs them.
@@ -60,7 +62,10 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
 
 ## Distribution
 
-- The runtime is ~19 MB per first load (`.wasm` 3.2 MB + `.data` 15.6 MB; brotli smaller),
-  and each run instantiates a fresh 256 MB-initial WASM memory.
+- The runtime is ~19 MB per first load (`.wasm` 3.2 MB + `.data` 15.9 MB; brotli smaller).
+  Each runtime grows to ~232 MB of WASM memory (~410 MB browser RSS with one runtime). On
+  devices reporting ≤ 4 GB (`navigator.deviceMemory`) or after a failed boot, no spare runtime
+  is pre-booted, so each Run pays ~2 s of boot.
+- Heap limit for student programs: 96 MB (`-Xmx96m`).
 - The upstream **prebuilt** (`runtime-prebuilt/`) contains GPL Doom code and must not be
   deployed; deploy only a source build from `scripts/build-runtime-source.sh`.

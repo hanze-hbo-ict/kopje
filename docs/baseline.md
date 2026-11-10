@@ -166,6 +166,24 @@ Sizes:
 Memory: 256 MB initial / 512 MB max shared WASM memory per runtime context (link flags); at
 most two contexts exist (active + spare). JS heap / RSS high-water mark: not measured.
 
+## Memory (E6, Chromium, `memory.spec.mjs`)
+
+Emscripten's `mmap` backs every JVM reservation with real memory, so JVM reservation sizes,
+not the link's initial memory, determine the footprint.
+
+| Configuration | WASM heap / runtime | Renderer RSS, one runtime | after run + new spare |
+|---|---:|---:|---:|
+| upstream flags (`-Xmx128m`, initial 256 MB, pool 16) | 268–308 MB | 469–496 MB | 772–801 MB |
+| initial 128 MB, pool 8, `-Xmx128m` | 308 MB | 476 MB | 761 MB |
+| `-Xmx96m`, code cache 8 MB | 220 MB | 401 MB | 651 MB |
+| `-Xmx64m`, code cache 8 MB, metaspace 64 MB | 172 MB | 383 MB | 590 MB |
+| **shipped**: initial 128 MB, pool 8, `-Xmx96m`, code cache 8 MB, metaspace 64 MB | 232 MB | 410 MB | 652 MB |
+
+"after run + new spare" includes the destroyed runtime's memory that the browser has not yet
+reclaimed. The shipped settings run a 40 MB `int[]` and turn unbounded allocation into a
+normal `OutOfMemoryError`. Warm compile+run with these settings: 0.29–0.31 s (Chromium),
+0.34–0.39 s (Firefox), no growth over 12 runs.
+
 ## Tests
 
 | Suite | Command | Result (2026-11-10) |
