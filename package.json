@@ -2,6 +2,7 @@
   "name": "kopje",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT-0",
   "description": "Browser-only Java IDE on a hardened JavaBox runtime",
   "type": "module",
   "scripts": {

@@ -3,6 +3,8 @@ Kopje — third-party notices
 This application runs entirely in your browser. It bundles or loads:
 
 Kopje (this application)
+  MIT No Attribution (MIT-0), see LICENSE.md in the repository. Parts adapted from Klode
+  and JavaBox remain under the MIT License (below).
   Source of this deployment, including the code it adds to the runtime below
   (runtime/native/jvm-main.c and no-sockets.js, linked into the VM; the java.nio.file
   patch built by scripts/build-nio-patch.sh) and the scripts that build it:
