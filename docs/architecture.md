@@ -14,8 +14,8 @@ IDE page (static)                         runtime iframe (one per run, disposabl
                                             └───────────────────────────────────────────┘
 ```
 
-Code: `runtime/java/CompileServer.java` (driver), `public/runtime/host/` (iframe, plain JS,
-served unbundled), `src/runtime/` (`JavaEngine`, `JavaBoxEngine`, protocol types), `src/`
+Code: `runtime/java/CompileServer.java` (driver), `runtime/host/` (iframe, plain JS, copied
+unbundled into the content-versioned `public/runtime/<hash>/`), `src/runtime/` (`JavaEngine`, `JavaBoxEngine`, protocol types), `src/`
 (IDE), `slice.html` (engine test page).
 
 ## ADR-1 — Replace the driver at runtime, not by relinking (revised after testing)
@@ -152,3 +152,16 @@ The patch ships at `/opt/jdk/patch/java.base` and is loaded with `--patch-module
 A Linux JDK's classes were considered and rejected: errno values still differ, the
 aarch64 `O_*` flags differ too, and Linux classes call other unlinked natives
 (`LinuxNativeDispatcher`, `copy_file_range`, epoll; `FileDispatcherImpl.<clinit>`).
+
+## ADR-9 — Loading and caching (E5)
+
+`scripts/prepare-runtime.mjs` assembles the runtime iframe, driver classes and JavaBox files
+into `public/runtime/<hash>/`, where `<hash>` covers every file. The path is generated into
+`src/runtime/runtime-location.generated.ts` and bundled into the hashed app script, so only
+`index.html` is revalidated (`no-cache`); `/assets/*` and `/runtime/*` are cached for a year
+as `immutable`. The `.wasm` and `.data` also ship as `.gz`, which the runtime host fetches and
+decompresses with `DecompressionStream`, handing the results to Emscripten through
+`instantiateWasm` and `getPreloadedPackage`; this makes transfer size independent of whether
+the static host compresses binary types. The jimage is linked uncompressed (`zip-0`), which
+gzips far better (10.3 MB vs 14.5 MB). Measured (Chromium, persistent profile): first load
+12.0 MB, reload 0.8 KB.

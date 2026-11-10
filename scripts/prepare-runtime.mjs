@@ -1,19 +1,28 @@
 #!/usr/bin/env node
-// Generates public/runtime/{driver,javabox}/ (git-ignored):
-//   driver/   javaedit driver classes (javac --release 17) + manifest.json
-//   javabox/  JavaBox runtime files copied from RUNTIME_DIR
+// Assembles the runtime into a content-versioned, immutable directory (PLAN.md §14 E5):
+//
+//   public/runtime/<version>/host/      runtime iframe (from runtime/host/)
+//   public/runtime/<version>/driver/    javaedit driver classes + manifest.json
+//   public/runtime/<version>/javabox/   JavaBox module (.mjs, .wasm, .data) + .gz variants
+//                                       + runtime.json (sizes, SHA-256, build info)
+//
+// <version> is a hash of every file, so a changed runtime always gets a new URL and can be
+// cached for a year. The path is written to src/runtime/runtime-location.generated.ts and
+// ends up inside the hashed app bundle; only index.html is revalidated.
+//
 // RUNTIME_DIR defaults to ~/javaedit-build/out-minimal (source build, docs/runtime-build.md),
 // falling back to runtime-prebuilt/ (upstream demo artifacts; contains Doom, dev only).
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdirSync, readdirSync, rmSync, writeFileSync, existsSync, statSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
-import { homedir } from 'node:os';
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync, renameSync } from 'node:fs';
+import { join, dirname, resolve, relative } from 'node:path';
+import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { gzipSync, constants as zlib } from 'node:zlib';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = join(ROOT, 'public', 'runtime');
+const OUT_ROOT = join(ROOT, 'public', 'runtime');
+const GENERATED = join(ROOT, 'src', 'runtime', 'runtime-location.generated.ts');
 const FILES = ['javabox-direct.mjs', 'javabox-direct.wasm', 'javabox-direct.data'];
 const candidates = [process.env.RUNTIME_DIR, join(homedir(), 'javaedit-build', 'out-minimal'), join(ROOT, 'runtime-prebuilt')].filter(Boolean);
 const runtimeDir = candidates.map((d) => resolve(d)).find((d) => FILES.every((f) => existsSync(join(d, f))));
@@ -22,21 +31,45 @@ if (!runtimeDir) {
   process.exit(1);
 }
 
-const driver = join(OUT, 'driver');
-rmSync(driver, { recursive: true, force: true });
-mkdirSync(driver, { recursive: true });
+const stage = mkdtempSync(join(tmpdir(), 'javaedit-runtime-'));
+cpSync(join(ROOT, 'runtime', 'host'), join(stage, 'host'), { recursive: true });
+
+const driver = join(stage, 'driver');
+mkdirSync(driver);
 execFileSync('javac', ['--release', '17', '-d', driver, join(ROOT, 'runtime', 'java', 'CompileServer.java')], { stdio: 'inherit' });
 const classes = readdirSync(driver).filter((f) => f.endsWith('.class')).sort();
 writeFileSync(join(driver, 'manifest.json'), JSON.stringify({ classes }, null, 2) + '\n');
 
-const javabox = join(OUT, 'javabox');
-rmSync(javabox, { recursive: true, force: true });
-mkdirSync(javabox, { recursive: true });
-const summary = {};
-for (const f of FILES) {
-  cpSync(join(runtimeDir, f), join(javabox, f));
-  summary[f] = { bytes: statSync(join(javabox, f)).size, sha256: createHash('sha256').update(readFileSync(join(javabox, f))).digest('hex') };
+const javabox = join(stage, 'javabox');
+mkdirSync(javabox);
+for (const f of FILES) cpSync(join(runtimeDir, f), join(javabox, f));
+// gzip variants of the two large binaries. Static hosts often don't compress binary types,
+// so the runtime host fetches these and decompresses them itself (DecompressionStream).
+for (const f of ['javabox-direct.wasm', 'javabox-direct.data']) {
+  writeFileSync(join(javabox, `${f}.gz`), gzipSync(readFileSync(join(javabox, f)), { level: zlib.Z_BEST_COMPRESSION }));
 }
-writeFileSync(join(javabox, 'runtime.json'), JSON.stringify({ source: runtimeDir, files: summary }, null, 2) + '\n');
-console.log(`public/runtime ready: ${classes.length} driver classes; runtime from ${runtimeDir}`);
-for (const [f, s] of Object.entries(summary)) console.log(`  ${f}  ${(s.bytes / 1e6).toFixed(1)} MB  ${s.sha256.slice(0, 12)}`);
+
+// Version = hash over every file's path and content.
+const all = [];
+const walk = (d) => { for (const n of readdirSync(d).sort()) { const p = join(d, n); statSync(p).isDirectory() ? walk(p) : all.push(p); } };
+walk(stage);
+const h = createHash('sha256');
+const summary = {};
+for (const p of all) {
+  const rel = relative(stage, p);
+  const data = readFileSync(p);
+  h.update(rel).update('\0').update(data).update('\0');
+  if (rel.startsWith('javabox/')) summary[rel.slice(8)] = { bytes: data.length, sha256: createHash('sha256').update(data).digest('hex') };
+}
+const version = h.digest('hex').slice(0, 12);
+const buildInfo = existsSync(join(runtimeDir, 'BUILD_INFO')) ? readFileSync(join(runtimeDir, 'BUILD_INFO'), 'utf8').trim().split('\n') : [];
+writeFileSync(join(javabox, 'runtime.json'), JSON.stringify({ version, source: runtimeDir, build: buildInfo, files: summary }, null, 2) + '\n');
+
+rmSync(OUT_ROOT, { recursive: true, force: true });
+mkdirSync(OUT_ROOT, { recursive: true });
+chmodSync(stage, 0o755); // mkdtemp creates 0700
+renameSync(stage, join(OUT_ROOT, version));
+writeFileSync(GENERATED, `// Generated by scripts/prepare-runtime.mjs - do not edit.\nexport const RUNTIME_VERSION = '${version}';\nexport const RUNTIME_PATH = 'runtime/${version}/host/runtime.html';\n`);
+
+console.log(`public/runtime/${version}: ${classes.length} driver classes; runtime from ${runtimeDir}`);
+for (const [f, s] of Object.entries(summary)) console.log(`  ${f.padEnd(26)} ${(s.bytes / 1e6).toFixed(1).padStart(5)} MB  ${s.sha256.slice(0, 12)}`);

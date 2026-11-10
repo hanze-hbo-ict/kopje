@@ -36,7 +36,25 @@ export const SECURITY_HEADERS = {
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), usb=(), serial=(), bluetooth=()',
 };
 
-/** Netlify / Cloudflare Pages `_headers` file content. */
+// E5 caching. Hashed assets and the content-versioned runtime never change at a given URL;
+// HTML is always revalidated so a new deployment is picked up.
+export const IMMUTABLE = 'public, max-age=31536000, immutable';
+export const REVALIDATE = 'no-cache';
+
+/** Cache-Control for a URL path. */
+export function cacheControlFor(pathname) {
+  return /^\/(assets|runtime)\//.test(pathname) ? IMMUTABLE : REVALIDATE;
+}
+
+/** Netlify / Cloudflare Pages `_headers` file content. Cache rules use paths that do not
+ *  overlap, because hosts combine headers from every matching rule. */
 export function headersFile() {
-  return ['/*', ...Object.entries(SECURITY_HEADERS).map(([k, v]) => `  ${k}: ${v}`)].join('\n') + '\n';
+  const block = (path, headers) => [path, ...Object.entries(headers).map(([k, v]) => `  ${k}: ${v}`)].join('\n');
+  return [
+    block('/*', SECURITY_HEADERS),
+    block('/assets/*', { 'Cache-Control': IMMUTABLE }),
+    block('/runtime/*', { 'Cache-Control': IMMUTABLE }),
+    block('/', { 'Cache-Control': REVALIDATE }),
+    block('/index.html', { 'Cache-Control': REVALIDATE }),
+  ].join('\n\n') + '\n';
 }

@@ -81,7 +81,9 @@ fi
 # 4. Class library.
 rm -rf build/jdk-wasm
 jlink --add-modules "$MODULES" --output build/jdk-wasm \
-  --strip-debug --no-man-pages --no-header-files --compress=zip-6
+  --strip-debug --no-man-pages --no-header-files --compress="${JAVAEDIT_JLINK_COMPRESS:-zip-0}"
+# E5: uncompressed jimage (zip-0) gzips to 10.3 MB on the wire vs 14.5 MB for zip-6; boot time
+# is unchanged; MEMFS then holds ~35 MB instead of ~16 MB per runtime (docs/baseline.md).
 rm -f build/jdk-wasm/lib/ct.sym                                   # only needed for javac --release
 find build/jdk-wasm/lib \( -name '*.so' -o -name '*.dylib' \) -type f -size +0c -delete
 find build/jdk-wasm/bin -type f -delete

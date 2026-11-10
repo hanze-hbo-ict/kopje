@@ -150,17 +150,45 @@ addEventListener('message', (e) => {
 });
 
 // ── boot ───────────────────────────────────────────────────────────────────────
+// ── fetching the large runtime files ───────────────────────────────────────────
+// E5: the .wasm and .data are fetched as .gz and decompressed here, so transfer size does
+// not depend on the static host compressing binary types. Falls back to the raw files when
+// DecompressionStream is unavailable (Safari < 16.4).
+async function fetchBytes(name) {
+  if (typeof DecompressionStream === 'function') {
+    const res = await fetch(RUNTIME_BASE + name + '.gz');
+    if (res.ok && res.body) {
+      return new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+    }
+  }
+  const res = await fetch(RUNTIME_BASE + name);
+  if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`);
+  return res.arrayBuffer();
+}
+
 async function boot() {
   if (!crossOriginIsolated) { post({ kind: 'error', errorKind: 'not-isolated', message: 'SharedArrayBuffer unavailable: COOP/COEP headers missing' }); return; }
   const t0 = performance.now();
   const manifest = await (await fetch(DRIVER_BASE + 'manifest.json')).json();
   const driverFiles = await Promise.all(manifest.classes.map(async (name) =>
     [name, new Uint8Array(await (await fetch(DRIVER_BASE + encodeURIComponent(name))).arrayBuffer())]));
-  const { default: createModule } = await import(RUNTIME_BASE + 'javabox-direct.mjs');
+  const [{ default: createModule }, wasmModule, dataPackage] = await Promise.all([
+    import(RUNTIME_BASE + 'javabox-direct.mjs'),
+    fetchBytes('javabox-direct.wasm').then((b) => WebAssembly.compile(b)),
+    fetchBytes('javabox-direct.data'),
+  ]);
   post({ kind: 'initializing' });
 
   Module = await createModule({
     locateFile: (p) => RUNTIME_BASE + p,
+    // Hand Emscripten the already-fetched, decompressed files (it also posts the compiled
+    // module to its pthread Workers, so they don't fetch the .wasm again).
+    instantiateWasm(imports, receive) {
+      WebAssembly.instantiate(wasmModule, imports).then((instance) => receive(instance, wasmModule),
+        (err) => post({ kind: 'error', errorKind: 'boot', message: 'WASM instantiation failed: ' + err }));
+      return {};
+    },
+    getPreloadedPackage: () => dataPackage,
     // The upstream prebuilt ignores Module.arguments; source builds append them after
     // jvm-main.c's defaults. The class path is NOT overridden: the driver is installed
     // over upstream's CompileServer in /opt/javabox, which works for both binaries.

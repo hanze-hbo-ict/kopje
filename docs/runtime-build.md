@@ -21,6 +21,8 @@ hand):
    (`--skip-native` reuses previous results).
 4. **Our jlink step** instead of upstream `build-jdk-modules.sh`: `--modules minimal` =
    `java.base,jdk.compiler,java.logging`; `--modules full` = upstream's 25-module list.
+   The jimage is uncompressed (`--compress=zip-0`, override with `JAVAEDIT_JLINK_COMPRESS`)
+   because it gzips much better on the wire (10.3 MB vs 14.5 MB).
    Deletes `ct.sym` (only needed for `javac --release`), host natives, `jspawnhelper`,
    `shaders.metallib`; creates the placeholder `.so` files the static symbol table needs.
 5. Builds `sun.nio.fs` for Emscripten (`scripts/build-nio-patch.sh`, ADR-8) into
@@ -39,9 +41,11 @@ hand):
 | Source build, upstream modules, JDK 21.0.10 jlink | 3.20 MB | 45.5 MB | 2.0 s |
 | **Source build, minimal modules, no ct.sym** | 3.20 MB | **15.6 MB** | 2.0 s |
 
-`scripts/prepare-runtime.mjs` copies a runtime into `public/runtime/javabox/` (plus
-`runtime.json` with SHA-256s) and compiles the driver into `public/runtime/driver/`. It
-prefers `$RUNTIME_DIR`, then `~/javaedit-build/out-minimal`, then `runtime-prebuilt/`.
+`scripts/prepare-runtime.mjs` assembles `public/runtime/<hash>/{host,driver,javabox}`: the
+runtime iframe from `runtime/host/`, the compiled driver, the JavaBox files plus `.gz`
+variants of `.wasm`/`.data`, and `runtime.json` (version, SHA-256s, build info). It writes the
+versioned path to `src/runtime/runtime-location.generated.ts` (ADR-9). It prefers
+`$RUNTIME_DIR`, then `~/javaedit-build/out-minimal`, then `runtime-prebuilt/`.
 
 On every JavaBox bump, diff `runtime/native/jvm-main.c` against upstream
 `build/jvm-main.c`, and our link command against upstream `build/link-direct-wasm.sh`.

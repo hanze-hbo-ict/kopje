@@ -5,7 +5,7 @@ const mode = process.env.E2E_SERVER || 'dist';
 const commands = {
   dist: 'node scripts/serve.mjs dist 5391',
   dev: 'npx vite --port 5391 --strictPort',
-  public: 'node scripts/serve.mjs public 5391',
+  public: 'node scripts/serve.mjs public 5391',   // runtime only (runtime-direct-diag)
 };
 export default defineConfig({
   testDir: './tests/e2e',
@@ -21,7 +21,7 @@ export default defineConfig({
   ],
   webServer: {
     command: commands[mode],
-    url: mode === 'public' ? 'http://127.0.0.1:5391/runtime/host/runtime.html' : 'http://127.0.0.1:5391/slice.html',
+    url: mode === 'public' ? 'http://127.0.0.1:5391/THIRD_PARTY_NOTICES.txt' : 'http://127.0.0.1:5391/',
     reuseExistingServer: false,
     timeout: 60_000,
   },

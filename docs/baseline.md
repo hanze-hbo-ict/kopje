@@ -160,8 +160,9 @@ Sizes:
 
 | | `.wasm` | `.data` | brotli total (approx.) |
 |---|---:|---:|---:|
-| Upstream prebuilt | 3.27 MB | 75.6 MB | 48.0 MB |
-| Shipped source build | 3.20 MB | 15.6 MB | not measured |
+| Upstream prebuilt | 3.27 MB | 75.6 MB | 48.0 MB (brotli, if the host compresses) |
+| Source build, zip-6 jimage | 3.20 MB | 15.9 MB | 15.3 MB (gzip) |
+| **Shipped**: zip-0 jimage, `.gz` decompressed in the runtime host | 3.20 MB (1.1 MB gz) | 34.9 MB (10.3 MB gz) | **12.0 MB first load, 0.8 KB reload** (`cache.spec.mjs`) |
 
 Memory: 256 MB initial / 512 MB max shared WASM memory per runtime context (link flags); at
 most two contexts exist (active + spare). JS heap / RSS high-water mark: not measured.

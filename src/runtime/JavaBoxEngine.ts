@@ -8,6 +8,7 @@
 import { validateFiles, isValidMainClass, sanitizeInput } from '../project/paths.ts';
 import type { JavaEngine } from './JavaEngine.ts';
 import type { HostCommand, RunResult, RuntimeEvent, SourceMap } from './runtime-protocol.ts';
+import { RUNTIME_PATH } from './runtime-location.generated.ts';
 
 export interface EngineOptions {
   runtimeUrl: string;
@@ -26,7 +27,8 @@ function lowMemoryDevice(): boolean {
 }
 
 const DEFAULTS: EngineOptions = {
-  runtimeUrl: new URL('runtime/host/runtime.html', document.baseURI).href,
+  // Content-versioned path (scripts/prepare-runtime.mjs), so the runtime can be cached immutably.
+  runtimeUrl: new URL(RUNTIME_PATH, document.baseURI).href,
   bootTimeoutMs: 120_000,
   runTimeoutMs: 120_000,
   outputCap: 1_000_000,

@@ -1,10 +1,11 @@
 // PLAN.md §13: S1 (no attacker-chosen code via URL), S2 (CSP), S7 (framing).
 import { test, expect } from '@playwright/test';
+import { RUNTIME_BASE } from './runtime-path.mjs';
 
 const ATTACKER = 'http://127.0.0.1:5392/';   // a different origin; nothing listens there
 
 test('S2/S7: security headers on pages, runtime document and assets', async ({ request }) => {
-  for (const path of ['/', '/runtime/host/runtime.html', '/runtime/host/runtime-host.js', '/runtime/javabox/javabox-direct.wasm']) {
+  for (const path of ['/', `${RUNTIME_BASE}/host/runtime.html`, `${RUNTIME_BASE}/host/runtime-host.js`, `${RUNTIME_BASE}/javabox/javabox-direct.wasm.gz`]) {
     const res = await request.get(path);
     expect(res.status(), path).toBe(200);
     const h = res.headers();
@@ -58,7 +59,7 @@ test('S1: runtime URL parameters cannot choose code, classes or JVM options', as
     f.id = 'probe';
     f.src = src;
     document.body.append(f);
-  }, `/runtime/host/runtime.html?${q}`);
+  }, `${RUNTIME_BASE}/host/runtime.html?${q}`);
   await expect.poll(() => events.some((e) => e.kind === 'ready'), { timeout: 120_000 }).toBe(true);
   expect(foreign, 'no request may go to the attacker origin').toEqual([]);
 });

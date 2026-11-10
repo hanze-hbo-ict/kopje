@@ -79,7 +79,10 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
 
 ## Distribution
 
-- The runtime is ~19 MB per first load (`.wasm` 3.2 MB + `.data` 15.9 MB; brotli smaller).
+- First load transfers ~12 MB (runtime `.gz` files, decompressed in the browser); later loads
+  come from the HTTP cache (0.8 KB measured). The host must keep `/runtime/*` and
+  `/assets/*` cacheable (`dist/_headers`). Each runtime holds the ~35 MB uncompressed class
+  library in memory.
   Each runtime grows to ~232 MB of WASM memory (~410 MB browser RSS with one runtime). On
   devices reporting ≤ 4 GB (`navigator.deviceMemory`) or after a failed boot, no spare runtime
   is pre-booted, so each Run pays ~2 s of boot.
