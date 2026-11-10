@@ -33,7 +33,7 @@ const DEFAULTS: EngineOptions = {
   prewarm: !lowMemoryDevice(),
 };
 
-const TERMINAL_ERRORS = new Set(['abort', 'boot', 'fatal', 'not-isolated']);
+const TERMINAL_ERRORS = new Set(['abort', 'boot', 'fatal', 'not-isolated', 'stack-overflow']);
 
 class RuntimeContext {
   readonly iframe: HTMLIFrameElement;

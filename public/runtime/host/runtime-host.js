@@ -105,6 +105,24 @@ function enqueueStdin(bytes) {
   Module.FS.write(stdinStream, data, 0, data.length);
 }
 
+// ── browser stack exhaustion ─────────────────────────────────────────────────────
+// HotSpot Zero makes one native call per Java call, so very deep recursion can exhaust the
+// browser's worker stack before the JVM's own check throws StackOverflowError (always in
+// WebKit; in Chromium/Firefox the JVM's own check fires first, at ~700-850 frames). The JVM thread then dies silently;
+// report it instead of hanging until the timeout.
+let stackReported = false;
+addEventListener('error', (e) => {
+  const msg = String(e.message || e.error?.message || '');
+  if (stackReported || !/Maximum call stack size exceeded|too much recursion/i.test(msg)) return;
+  stackReported = true;
+  flushOutput();
+  post({
+    kind: 'error', errorKind: 'stack-overflow',
+    message: 'StackOverflowError: the program nested method calls deeper than the browser allows '
+      + '(roughly 700 calls in Edge/Chrome, fewer in Safari). Check for recursion without a base case.',
+  });
+});
+
 // ── messages from the parent ────────────────────────────────────────────────────
 addEventListener('message', (e) => {
   if (e.origin !== parentOrigin || e.source !== parent) return;

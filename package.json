@@ -14,7 +14,8 @@
     "test:host": "node --test tests/host/driver.test.mjs",
     "test": "npm run test:unit && npm run test:host",
     "test:e2e": "npm run build:test && playwright test",
-    "build:test": "JAVAEDIT_TEST_PAGES=1 npm run build"
+    "build:test": "JAVAEDIT_TEST_PAGES=1 npm run build",
+    "test:diag": "npm run build:test && DIAG=1 playwright test -diag"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

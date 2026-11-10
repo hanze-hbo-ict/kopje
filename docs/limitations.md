@@ -39,6 +39,13 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
   (the run then ends via the timeout or Stop).
 - **Speed:** Zero interpreter, no JIT. The javac warm-up adds ~1.5 s to each runtime boot (hidden by pre-booting); a warm compile+run of a small program takes 0.3–0.45 s;
   compute-heavy programs are slow.
+- **Recursion depth is limited to roughly 700 nested calls** in Edge/Chrome and Firefox
+  (845 for trivial methods; a desktop JVM allows ~10,000). HotSpot Zero makes one native
+  WASM call per Java call, and the browser's worker stack (~1 MB in Chromium) is the real
+  limit. The program runs on a 320 KB thread so the JVM throws a normal, catchable
+  `StackOverflowError` first. Safari's worker stack is smaller still; there the browser
+  limit is reached first and the run ends with a "StackOverflowError: … deeper than the
+  browser allows" message instead of hanging (`correctness.spec.mjs`).
 - **Main method:** classic `public static void main(String[])` only (no JDK 21 preview
   instance-main).
 - **Rename is not a refactoring:** renaming `A.java` does not change `class A` or package

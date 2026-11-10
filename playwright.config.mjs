@@ -9,6 +9,8 @@ const commands = {
 };
 export default defineConfig({
   testDir: './tests/e2e',
+  // Diagnostic specs (*-diag) measure or probe and may wait for timeouts; run with DIAG=1.
+  testIgnore: process.env.DIAG === '1' ? [] : [/-diag\.spec\.mjs$/],
   timeout: 240_000,
   workers: 1,
   use: { baseURL: 'http://127.0.0.1:5391' },

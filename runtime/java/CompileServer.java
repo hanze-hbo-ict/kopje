@@ -39,6 +39,12 @@ import java.util.*;
  *   javaedit.poll     "true" (default): wait for input by polling available(), which makes
  *                     waiting-for-input observable.
  *   javaedit.warmup   "false" disables the javac warm-up compile.
+ *   javaedit.stackKb  stack size of the thread that runs the student's main (default 320).
+ *                     In the browser, HotSpot Zero uses one native WASM call per Java call,
+ *                     and the browser's worker stack (~1 MB in Chromium) is far smaller than
+ *                     a JVM's. 320 KB makes the JVM throw a normal StackOverflowError (~855
+ *                     frames) before Chromium/Firefox hit their native limit; HotSpot rounds
+ *                     to 64 KB, and 384 KB already exceeds Chromium's limit.
  */
 public class CompileServer {
     static final int MAX_FILES = 200;
@@ -362,10 +368,23 @@ public class CompileServer {
                     + q(mainClass + " has no public static void main(String[] args)") + "}");
             return 1;
         }
-        Thread.currentThread().setContextClassLoader(loader);
         emit("{\"t\":\"running\"}");
+        main.setAccessible(true);
+        long stackBytes = Long.getLong("javaedit.stackKb", 320L) * 1024;
+        int[] code = {1};
+        Thread runner = new Thread(null, () -> { code[0] = invokeMain(main, mainClass); }, "main", stackBytes);
+        runner.setContextClassLoader(loader);
+        runner.start();
         try {
-            main.setAccessible(true);
+            runner.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return code[0];
+    }
+
+    static int invokeMain(Method main, String mainClass) {
+        try {
             main.invoke(null, (Object) new String[0]);
             return 0;
         } catch (InvocationTargetException e) {

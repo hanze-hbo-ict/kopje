@@ -1,4 +1,4 @@
-// Diagnostic: boot the runtime iframe document directly (no IDE, no bundler).
+// Diagnostic: boot the runtime iframe document directly (no IDE, no bundler). E2E_SERVER=public DIAG=1
 // Run: npx playwright test runtime-direct --project=chromium
 import { test } from '@playwright/test';
 test('runtime boots directly', async ({ page }) => {
