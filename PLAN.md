@@ -390,3 +390,44 @@ exam questions need them), a separate runtime origin.
   input goes through the MEMFS file channel rather than the upstream ring buffer.
 - Not pursued: the one-off 10× Firefox/WebKit slowdown observed in a single full e2e run
   (`docs/baseline.md`).
+
+## 15. Optional follow-ups
+
+### O1 — Origin separation in Safari via a second origin (not planned)
+
+**Situation.** Safari/WebKit can't run the runtime in the opaque-origin sandbox (ADR-10): it
+does not make opaque-origin frames cross-origin isolated, so shared WASM memory can't be
+posted to Workers (`DataCloneError`). The engine falls back to a same-origin frame. That frame
+still fetches nothing and has `connect-src 'none'`, but has no origin separation from the IDE.
+Exams run on Edge, which gets the full sandbox; Safari is the owner's development browser.
+
+**Probe (2026-11-10, Playwright WebKit/Chromium/Firefox, page and frame on different ports):**
+
+| Frame | WebKit | Chromium | Firefox |
+|---|---|---|---|
+| same host, sandboxed (opaque origin) | not isolated; shared memory to Worker fails | works | works |
+| real second origin, no `sandbox` | isolated; parent DOM blocked; shared memory to Worker works | works | works |
+
+Not verified in real Safari, and JavaBox itself was not run in the second-origin setup.
+
+**Design if built.** Extend the existing fallback: sandbox first; if the frame reports it isn't
+isolated *and* `JAVAEDIT_RUNTIME_ORIGIN` is configured, reload it as a cross-origin iframe on
+that origin (optionally `sandbox="allow-scripts allow-same-origin"`, which keeps that origin
+but blocks popups, forms and top navigation); otherwise today's same-origin fallback.
+Engine messages use that exact origin. The runtime origin's `frame-ancestors` names the IDE
+origin, so header files are written per origin.
+
+**Cost.** Development: about half a day (most of it a two-origin test setup and isolation tests
+in three engines). Operations: a second static site/hostname serving the same `dist/` (free
+tiers usually suffice; traffic barely changes because the IDE page fetches the runtime files),
+two header configurations per release (`verify:dist` extended), possibly a second exam
+whitelist entry (depends on enforcement: top-level visits only, browser URL policy, or network
+filtering). Maintenance: a third isolation mode and a 1–2 minute longer test suite.
+
+**Why not now.** It only adds origin separation for code that escapes WebAssembly in Safari,
+which in development is the owner's own code. It would not make Safari exercise the exam code
+path (it would be a third path), so runtime behaviour should still be checked in Chrome/Edge
+or with `npm run test:e2e`.
+
+**Open question for the exam laptop (owner).** Does the whitelist apply to top-level visits
+only, to subframe navigations, or to all requests? Relevant only if O1 is ever built.
