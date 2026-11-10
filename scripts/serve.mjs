@@ -29,4 +29,4 @@ createServer((req, res) => {
     'Cache-Control': 'no-cache',
   });
   createReadStream(file).pipe(res);
-}).listen(port, () => console.log(`serving ${root} on http://localhost:${port} (COOP/COEP on)`));
+}).listen(port, '127.0.0.1', () => console.log(`serving ${root} on http://localhost:${port} (COOP/COEP on)`));

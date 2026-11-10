@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizePath, validateFiles, isValidMainClass, pathToClassName, sanitizeInput } from '../../runtime/engine/paths.js';
+import { normalizePath, validateFiles, isValidMainClass, pathToClassName, sanitizeInput } from '../../src/project/paths.ts';
 
 test('accepts package-relative paths', () => {
   assert.equal(normalizePath('Main.java'), 'Main.java');

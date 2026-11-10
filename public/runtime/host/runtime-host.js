@@ -7,14 +7,14 @@
 //   stdin    (host -> Java): append-only MEMFS file /work/stdin, polled by the driver
 //
 // Messages from the parent: {type:'start', files, mainClass} | {type:'stdin', text} | {type:'eof'}
-// Messages to the parent:   {type:'event', event:{...}}  (see runtime-protocol.js)
+// Messages to the parent:   {type:'event', event:{...}}  (see src/runtime/runtime-protocol.ts)
 
 const EOF_BYTE = 0x04;             // driver maps 0x04 to end-of-stream
 const FLUSH_MS = 16;
 
 const params = new URLSearchParams(location.search);
-const RUNTIME_BASE = params.get('runtime') || './javabox/';
-const DRIVER_BASE = params.get('driver') || './driver/';
+const RUNTIME_BASE = params.get('runtime') || '../javabox/';
+const DRIVER_BASE = params.get('driver') || '../driver/';
 const OUTPUT_CAP = Number(params.get('outputCap') || 1_000_000);   // bytes
 
 const parentOrigin = location.origin;   // same-origin topology (Phase 5 may change this)
@@ -135,11 +135,11 @@ async function boot() {
 
   Module = await createModule({
     locateFile: (p) => RUNTIME_BASE + p,
-    // NOTE: the prebuilt binary ignores Module.arguments (verified: even -version has
-    // no effect). Kept for a future source build whose jvm-main.c forwards argv; the
-    // driver's property defaults already match these values.
+    // The upstream prebuilt ignores Module.arguments; source builds append them after
+    // jvm-main.c's defaults. The class path is NOT overridden: the driver is installed
+    // over upstream's CompileServer in /opt/javabox, which works for both binaries.
+    // The driver's property defaults already equal these values.
     arguments: [
-      '-Djava.class.path=/opt/javaedit',
       '-Djavaedit.src=/work/src',
       '-Djavaedit.ctl=/dev/jectl',
       ...params.getAll('jvmArg'),   // diagnostics only, e.g. ?jvmArg=-Xlog:startuptime

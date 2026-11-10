@@ -47,7 +47,7 @@ public class Calculator {
   <pre id="out" aria-live="polite"></pre>
   <form id="inform" class="row"><input id="stdin" aria-label="Program input" autocomplete="off"><button>Send</button><button type="button" id="eof">EOF</button></form>
   <script type="module">
-    import { JavaBoxEngine } from './engine/JavaBoxEngine.js';
+    import { JavaBoxEngine } from './src/runtime/JavaBoxEngine.ts';
     const $ = (id) => document.getElementById(id);
     const out = $('out'), status = $('status');
     const append = (text, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = text; out.append(s); };
