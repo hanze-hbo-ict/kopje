@@ -48,6 +48,9 @@ Setup, once:
    should. Run the workflow manually with **update lock**; it
    uploads the new `runtime.lock.json` as an artifact without deploying. Review and commit it.
    Do the same after any deliberate runtime change.
+   The lock then pins **CI's** build, which is the one that deploys. A runtime built locally
+   (Homebrew emcc, different build paths) gets a different `.wasm`/`.mjs` and no longer passes
+   `verify:dist`; its `.data` (class library) should still match. Deploy through CI.
 
 ## Build and verify locally
 

@@ -4,14 +4,15 @@
     "openjdk version \"21.0.10\" 2026-01-20 LTS",
     "modules: java.base,jdk.compiler,java.logging",
     "link: own jvm-main.c + no-sockets.js; INITIAL_MEMORY=128MB PTHREAD_POOL_SIZE=8",
+    "build host: Linux-x86_64, cross-linked macos-aarch64 jmods",
     "javabox 506756b78cacedc23026fb4445e4cb57e11048b1",
     "openjdk e339656cdd1c9e09aaf1c4ca9a87c399e3df56a7",
     "libffi  0b72a27b7cd647eb31f15144dcfeacde864de9f1",
-    "emcc    emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 5.0.2-git"
+    "emcc    emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 5.0.2 (dc80f645ee70178c11666de0c3860d9e064d50e4)"
   ],
   "files": {
-    "javabox-direct.mjs": "e3e9be6bb5f92afe417a4101f6eed1d04dec57eb50c5f5b30ebaee9232026f78",
-    "javabox-direct.wasm": "bf61d256efb9eae58d07485590ccca750b816fbc920c11eec9be377e11ecbc37",
+    "javabox-direct.mjs": "eaa7c075c93a6b0a104e73f0a7a8c716899aa80482ad2220cdb4a3911b4abad7",
+    "javabox-direct.wasm": "fdcd8d8601399af2c56be69ff1f82c495ed98b69c60fac1c712dbbc2e84b2d1f",
     "javabox-direct.data": "89a8ad3c35a7430b2136e48720d1506c93dbae78e1d571e71b0badb3b92dc1b5"
   }
 }
