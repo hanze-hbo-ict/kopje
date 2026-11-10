@@ -8,7 +8,8 @@ RUNTIME_DIR=~/kopje-build/out-minimal npm run build
 ```
 
 `scripts/build-runtime-source.sh` (build hosts: macOS/arm64, Linux x64/aarch64; on Linux
-install autoconf, automake, libtool, libltdl-dev, make, zip, unzip and emsdk):
+install autoconf, automake, libtool, libltdl-dev, make, zip, unzip, clang and emsdk; the script
+shims `cc`/`c++` to clang because OpenJDK's configure needs a clang build compiler):
 
 1. **Copies** the pinned `vendor/javabox` checkout to `$KOPJE_BUILD_DIR/javabox`
    (default `~/kopje-build`). libtool and OpenJDK configure fail on paths with spaces,

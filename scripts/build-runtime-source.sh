@@ -94,6 +94,15 @@ fetch_jdk "$CLASSLIB_JDK_DIR" "$JDK_MAC_AARCH64"
 J="$(jdk_home "$HOST_JDK_DIR")"
 CLASSLIB="$(jdk_home "$CLASSLIB_JDK_DIR")"
 export JAVA_HOME="$J" JAVABOX_BOOT_JDK="$J" JAVABOX_JDK21_HOME="$J" PATH="$J/bin:$PATH"
+# OpenJDK's configure (--with-toolchain-type=clang) requires the build compiler to be clang,
+# and upstream passes BUILD_CC=cc BUILD_CXX=c++. On Linux cc is usually GCC: shim it.
+if [ "$(uname -s)" = Linux ] && ! cc --version 2>/dev/null | grep -q clang; then
+  command -v clang >/dev/null && command -v clang++ >/dev/null || { echo "Linux build host needs clang (BUILD_CC for OpenJDK's build tools)" >&2; exit 1; }
+  mkdir -p "$BUILD_DIR/clang-as-cc"
+  ln -sf "$(command -v clang)" "$BUILD_DIR/clang-as-cc/cc"
+  ln -sf "$(command -v clang++)" "$BUILD_DIR/clang-as-cc/c++"
+  export PATH="$BUILD_DIR/clang-as-cc:$PATH"
+fi
 
 cd "$SRC"
 # 3. Native libraries (upstream scripts, unchanged).
