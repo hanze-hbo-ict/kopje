@@ -32,6 +32,9 @@ if (distArg) {
                    "connect-src 'none'", 'Cross-Origin-Resource-Policy: cross-origin', 'Access-Control-Allow-Origin: *']) {
     if (!headers.includes(h)) fail(`dist/_headers lacks "${h}"`);
   }
+  const notices = existsSync(join(dist, 'THIRD_PARTY_NOTICES.txt')) ? readFileSync(join(dist, 'THIRD_PARTY_NOTICES.txt'), 'utf8') : '';
+  if (!/github\.com\/hanze-hbo-ict\/kopje\/tree\/[0-9a-f]{40}\b/.test(notices)) fail('dist/THIRD_PARTY_NOTICES.txt lacks the source link to this deployment\'s commit');
+  if (notices.includes('uncommitted local changes')) fail('dist/ was built from uncommitted changes, so the source link does not match it; commit first');
   if (existsSync(join(dist, 'slice.html'))) fail('dist/slice.html is a test page (S6); build with `npm run build`, not build:test');
   const versions = existsSync(join(dist, 'runtime')) ? readdirSync(join(dist, 'runtime')) : [];
   if (versions.length !== 1) fail(`expected exactly one runtime version in dist/runtime, found ${versions.length}`);

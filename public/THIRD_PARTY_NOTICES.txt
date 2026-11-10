@@ -2,13 +2,19 @@ Kopje — third-party notices
 
 This application runs entirely in your browser. It bundles or loads:
 
+Kopje (this application)
+  Source of this deployment, including the code it adds to the runtime below
+  (runtime/native/jvm-main.c and no-sockets.js, linked into the VM; the java.nio.file
+  patch built by scripts/build-nio-patch.sh) and the scripts that build it:
+  https://github.com/hanze-hbo-ict/kopje/tree/@KOPJE_COMMIT@
+
 OpenJDK 21 (HotSpot Zero VM, java.base/java.logging/jdk.compiler class library)
   Licence: GNU General Public License, version 2, with the Classpath Exception
   (and the OpenJDK Assembly Exception). Per-module licence files are included in the
   runtime image under /opt/jdk/legal/. Corresponding source: OpenJDK fork
   https://github.com/bmarti44/openjdk (branch wasm-emscripten), commit
   e339656cdd1c9e09aaf1c4ca9a87c399e3df56a7; class library jlinked from Eclipse
-  Temurin 21.0.10+7. Build script: scripts/build-runtime-source.sh in this project.
+  Temurin 21.0.10+7. Build script: scripts/build-runtime-source.sh in Kopje (above).
 
 JavaBox (browser JVM embedding, build scripts)
   https://github.com/bmarti44/javabox, commit 506756b78cacedc23026fb4445e4cb57e11048b1
