@@ -1,5 +1,5 @@
 /*
- * jvm-main.c — javaedit's JVM entry point for the Emscripten build (PLAN.md N1).
+ * jvm-main.c — Kopje's JVM entry point for the Emscripten build (PLAN.md N1).
  *
  * Replaces JavaBox's build/jvm-main.c (MIT, © 2026 Brian Martin) at build time; the
  * JavaBox repository itself stays pinned and unmodified. Compared with upstream:
@@ -36,7 +36,7 @@ static volatile int32_t data_seq = 0;    /* bumped after every write; futex word
 static int ring_enabled = 0;
 
 /* Blocking read of one byte (JVM thread). Returns EOF never: the ring has no EOF;
- * the javaedit driver reads student input from a MEMFS file instead and only a
+ * the Kopje driver reads student input from a MEMFS file instead and only a
  * program that opens FileDescriptor.in directly ends up here. */
 int stdin_read_byte(void) {
     for (;;) {

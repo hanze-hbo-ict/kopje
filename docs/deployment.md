@@ -40,7 +40,7 @@ npm run verify:dist                                   # must print "verify: OK"
 - `dist/_headers` lacks the security or cache headers;
 - `dist/slice.html` (test page) is present (S6);
 - a runtime file differs from its recorded SHA-256 (`runtime.json`);
-- the runtime is not a javaedit source build: the upstream prebuilt contains GPL Doom code
+- the runtime is not a Kopje source build: the upstream prebuilt contains GPL Doom code
   and must never be deployed;
 - the runtime differs from **`runtime.lock.json`**. After a deliberate runtime change
   (new JavaBox pin, module set, JVM options), review the diff and update the lock with

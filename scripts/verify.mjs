@@ -42,7 +42,7 @@ if (distArg) {
       if (data.length !== bytes || createHash('sha256').update(data).digest('hex') !== sha256) fail(`runtime file ${file} does not match runtime.json`);
     }
     if (!info.build.some((l) => l.startsWith('link: own jvm-main.c'))) {
-      fail('the runtime is not a javaedit source build (scripts/build-runtime-source.sh); never deploy the upstream prebuilt');
+      fail('the runtime is not a Kopje source build (scripts/build-runtime-source.sh); never deploy the upstream prebuilt');
     }
     const pinned = Object.fromEntries(['javabox-direct.mjs', 'javabox-direct.wasm', 'javabox-direct.data'].map((f) => [f, info.files[f].sha256]));
     if (flag === '--lock') {

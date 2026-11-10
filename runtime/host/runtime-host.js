@@ -1,6 +1,6 @@
 // runtime-host.js — runs inside the disposable runtime iframe (runtime.html).
 //
-// Boots ONE JavaBox JVM with the javaedit driver first on the class path, then
+// Boots ONE JavaBox JVM with the Kopje driver first on the class path, then
 // bridges three channels to the parent window via postMessage:
 //   control  (Java -> host): JSON lines on the /dev/jectl device
 //   stdout / stderr (Java -> host): per-byte Emscripten devices, forwarded in order
@@ -251,7 +251,7 @@ async function boot(assets) {
       FS.writeFile('/work/stdin', new Uint8Array(0));
       // Install the driver as /opt/javabox/CompileServer*.class once the preload package
       // has populated the filesystem; main() is held back with a run dependency until then.
-      // javaedit's runtime build preloads only /opt/jdk; the upstream prebuilt also ships
+      // Kopje's runtime build preloads only /opt/jdk; the upstream prebuilt also ships
       // /opt/javabox (its own CompileServer and Doom), which is removed first.
       M.addRunDependency('javaedit-driver');
       const install = () => {

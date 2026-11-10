@@ -1,4 +1,4 @@
-javaedit — third-party notices
+Kopje — third-party notices
 
 This application runs entirely in your browser. It bundles or loads:
 

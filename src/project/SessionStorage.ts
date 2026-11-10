@@ -9,7 +9,7 @@
 import { validateFiles, isValidMainClass } from './paths.ts';
 import type { JavaProject, UiState, ThemeChoice } from './model.ts';
 
-const KEY = 'javaedit:session:v1';
+const KEY = 'kopje:session:v1';
 
 interface Stored { v: 1; project: JavaProject; ui: UiState }
 

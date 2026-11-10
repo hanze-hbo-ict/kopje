@@ -2,7 +2,7 @@
 // Assembles the runtime into a content-versioned, immutable directory (PLAN.md §14 E5):
 //
 //   public/runtime/<version>/host/      runtime iframe (from runtime/host/)
-//   public/runtime/<version>/driver/    javaedit driver classes + manifest.json
+//   public/runtime/<version>/driver/    Kopje driver classes + manifest.json
 //   public/runtime/<version>/javabox/   JavaBox module (.mjs, .wasm, .data) + .gz variants
 //                                       + runtime.json (sizes, SHA-256, build info)
 //

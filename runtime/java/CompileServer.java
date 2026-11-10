@@ -6,12 +6,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
- * javaedit runtime driver — a single-use replacement for JavaBox's CompileServer.
+ * Kopje runtime driver — a single-use replacement for JavaBox's CompileServer.
  *
- * The class keeps the name {@code CompileServer} (default package) because the
- * prebuilt native entry point (build/jvm-main.c) calls FindClass("CompileServer").
- * It is put first on the class path by the host (-Djava.class.path=/opt/javaedit:...),
- * so the upstream daemon is never loaded and no WASM relink is required.
+ * The class keeps the name {@code CompileServer} (default package) because the native
+ * entry point (runtime/native/jvm-main.c, like upstream's) calls FindClass("CompileServer").
+ * The runtime host installs it as /opt/javabox/CompileServer*.class before the JVM starts
+ * (docs/architecture.md ADR-1).
  *
  * Lifecycle — exactly ONE compile-and-run per JVM:
  *   1. boot, warm up javac, emit {"t":"ready"} on the control channel

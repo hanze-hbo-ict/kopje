@@ -190,8 +190,8 @@ normal `OutOfMemoryError`. Warm compile+run with these settings: 0.29–0.31 s (
 | Suite | Command | Result (2026-11-10) |
 |---|---|---|
 | Upstream Playwright | `npx playwright test` in `vendor/javabox` | not run — tests Doom/upstream UI we do not ship |
-| javaedit unit (paths, project, session storage) | `npm run test:unit` | 13/13 pass |
-| javaedit driver on host JDK 17 | `npm run test:host` | 14/14 pass |
+| Kopje unit (paths, project, session storage) | `npm run test:unit` | 13/13 pass |
+| Kopje driver on host JDK 17 | `npm run test:host` | 14/14 pass |
 | Gate 2 slice | `npx playwright test slice` | 2/2 pass in Chromium, Firefox, WebKit (prebuilt and shipped runtime) |
 | Gate 4 IDE | `npx playwright test ide` | 2/2 pass in Chromium, Firefox, WebKit |
 | Capability probes | `npx playwright test capabilities` | 10/10 pass in all three (see capability-matrix.md) |

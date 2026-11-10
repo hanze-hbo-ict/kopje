@@ -1,4 +1,4 @@
-# javaedit
+# Kopje
 
 A browser-only Java IDE for small multi-file assignments: Klode's look and interaction, with
 packages, several files, interactive `Scanner` input and a reliable Stop. Java runs in a

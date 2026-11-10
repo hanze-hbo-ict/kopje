@@ -4,12 +4,12 @@
 IDE page (static)                         runtime iframe (one per run, disposable)
 ┌──────────────────────────┐   postMessage  ┌───────────────────────────────────────────┐
 │ JavaBoxEngine            │ ─────────────▶ │ runtime-host.js                           │
-│  · validate paths/limits │ start/stdin/eof│  · preRun: write driver → /opt/javaedit,  │
+│  · validate paths/limits │ start/stdin/eof│  · preRun: write driver → /opt/Kopje,  │
 │  · one run at a time     │ ◀───────────── │    mkdir /work/src, create /dev/jectl     │
 │  · timeout, Stop         │    events      │  · stdout/stderr per-byte devices         │
 │  · prewarm next iframe   │                │  · bounded writes into stdin ring         │
 └──────────────────────────┘                │ JavaBox WASM (PROXY_TO_PTHREAD, 16 Workers)│
-                                            │  └ JVM → javaedit CompileServer (driver)  │
+                                            │  └ JVM → Kopje CompileServer (driver)  │
                                             │       compile all files → run main → exit │
                                             └───────────────────────────────────────────┘
 ```
@@ -22,7 +22,7 @@ unbundled into the content-versioned `public/runtime/<hash>/`), `src/runtime/` (
 
 `jvm-main.c` hard-codes `FindClass("CompileServer")` with class path
 `/opt/javabox:/opt/javabox/doom.jar`. The original plan was to pass
-`-Djava.class.path=/opt/javaedit` via `Module.arguments`. **Testing showed the prebuilt
+`-Djava.class.path=/opt/Kopje` via `Module.arguments`. **Testing showed the prebuilt
 ignores `Module.arguments`**, so the runtime host instead:
 
 1. calls `addRunDependency('javaedit-driver')` in `preRun`, which holds back `main()`;

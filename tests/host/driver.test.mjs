@@ -1,4 +1,4 @@
-// Host-JVM tests for runtime/java/CompileServer.java (the javaedit runtime driver).
+// Host-JVM tests for runtime/java/CompileServer.java (the Kopje runtime driver).
 //
 // These exercise the compile/diagnostic/stdin protocol on a local JDK (17+), with
 // the same control-channel contract used in the browser. They do NOT prove WASM

@@ -1,5 +1,5 @@
 {
-  "name": "javaedit",
+  "name": "kopje",
   "version": "0.1.0",
   "private": true,
   "description": "Browser-only Java IDE on a hardened JavaBox runtime",

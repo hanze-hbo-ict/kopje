@@ -56,10 +56,10 @@ src, dst = sys.argv[1], sys.argv[2]
 s = open(src).read()
 edits = [
     ("        int flags = followLinks ? 0 : CLONE_NOFOLLOW;\n",
-     "        if (true) return IOStatus.UNSUPPORTED_CASE; // javaedit: no clonefile on Emscripten\n"
+     "        if (true) return IOStatus.UNSUPPORTED_CASE; // Kopje: no clonefile on Emscripten\n"
      "        int flags = followLinks ? 0 : CLONE_NOFOLLOW;\n"),
     ("        return directCopy0(dst, src, addressToPollForCancel);\n",
-     "        return IOStatus.UNSUPPORTED; // javaedit: no fcopyfile on Emscripten; use bufferedCopy\n"),
+     "        return IOStatus.UNSUPPORTED; // Kopje: no fcopyfile on Emscripten; use bufferedCopy\n"),
 ]
 for old, new in edits:
     if s.count(old) != 1:

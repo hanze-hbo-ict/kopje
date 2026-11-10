@@ -62,11 +62,11 @@ test('session store round-trips project and theme', () => {
 
 test('session store rejects corrupt or unsafe data and survives quota errors', () => {
   const storage = new MemoryStorage();
-  storage.setItem('javaedit:session:v1', '{not json');
+  storage.setItem('kopje:session:v1', '{not json');
   assert.equal(new SessionStore(storage).load(), null);
-  storage.setItem('javaedit:session:v1', JSON.stringify({ v: 1, project: { files: { '../evil.java': '' }, mainClass: 'x', activeFile: '' }, ui: {} }));
+  storage.setItem('kopje:session:v1', JSON.stringify({ v: 1, project: { files: { '../evil.java': '' }, mainClass: 'x', activeFile: '' }, ui: {} }));
   assert.equal(new SessionStore(storage).load(), null);
-  storage.setItem('javaedit:session:v1', JSON.stringify({ v: 1, project: { files: { 'A.java': '' }, mainClass: 'bad name', activeFile: 'nope' }, ui: { theme: 'neon' } }));
+  storage.setItem('kopje:session:v1', JSON.stringify({ v: 1, project: { files: { 'A.java': '' }, mainClass: 'bad name', activeFile: 'nope' }, ui: { theme: 'neon' } }));
   const r = new SessionStore(storage).load();
   assert.equal(r.project.activeFile, 'A.java');
   assert.equal(r.project.mainClass, '');

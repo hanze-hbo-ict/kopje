@@ -26,7 +26,7 @@ test('E1: Copy all puts an exact bundle on the clipboard', async ({ page, contex
   await expect(page.locator('#file-message')).toHaveText('Copied 2 files.');
   const clip = await page.evaluate(() => navigator.clipboard.readText());
   await page.waitForTimeout(500); // debounced save
-  const files = (await page.evaluate(() => JSON.parse(sessionStorage.getItem('javaedit:session:v1')))).project.files;
+  const files = (await page.evaluate(() => JSON.parse(sessionStorage.getItem('kopje:session:v1')))).project.files;
   expect(files['example/Calculator.java']).toBe(UNICODE_SRC);
   expect(clip).toBe(bundle(files));
   await page.locator('#copy-file').click();
@@ -118,7 +118,7 @@ test('E4: New project resets and clears storage; unload warning once modified', 
   await page.locator('#new-project').click();
   await expect(page.locator('#file-list button[data-path]')).toHaveCount(2);
   await expect(page.locator('#filename-text')).toHaveText('example/Main.java');
-  expect(await page.evaluate(() => sessionStorage.getItem('javaedit:session:v1'))).toBeNull();
+  expect(await page.evaluate(() => sessionStorage.getItem('kopje:session:v1'))).toBeNull();
   const firedAfter = await page.evaluate(() => {
     const ev = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(ev);

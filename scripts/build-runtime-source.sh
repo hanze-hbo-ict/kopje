@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reproducible source build of the JavaBox runtime for javaedit (Phase 3).
+# Reproducible source build of the JavaBox runtime for Kopje (Phase 3).
 #
 #   scripts/build-runtime-source.sh [--modules full|minimal] [--skip-native]
 #
