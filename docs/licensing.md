@@ -10,7 +10,7 @@
 | Mocha Doom (`container/doom`) | GPL (Mocha Doom) | **no** — excluded from our build | prebuilt currently contains `doom.jar` → must not be redistributed by us; Phase 3 build drops it |
 | Freedoom IWAD | BSD-3-Clause | **no** | excluded |
 | xterm.js (upstream demo) | MIT | no (not used) | — |
-| Klode UI reference | unknown licence | no code copied | design reference only (Phase 4) |
+| Klode (`hanze-hbo-ict/klode`) | MIT, © 2026 Codeklad contributors | yes: design tokens, styles and small UI patterns adapted in `src/styles.css`, `src/editor/editor-theme.ts`, `src/console/JavaConsole.ts`, `src/ui/theme.ts` | attribution in those files and in `THIRD_PARTY_NOTICES.txt` |
 
 **Distribution plan:** do not deploy the upstream prebuilt as-is (it contains Doom). Deploy a
 Phase 3 source-built runtime, publish its exact source revisions and build script, include
