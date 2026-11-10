@@ -1,0 +1,3 @@
+[submodule "vendor/javabox"]
+	path = vendor/javabox
+	url = https://github.com/bmarti44/javabox
