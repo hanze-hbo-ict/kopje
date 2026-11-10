@@ -61,7 +61,7 @@ jobs:
         if: steps.runtime.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq autoconf automake libtool make zip unzip file
+          sudo apt-get install -y -qq autoconf automake libtool libltdl-dev make zip unzip file
           git clone --depth 1 --branch "$EMSDK_VERSION" https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
           "$RUNNER_TEMP/emsdk/emsdk" install "$EMSDK_VERSION"
           "$RUNNER_TEMP/emsdk/emsdk" activate "$EMSDK_VERSION"
