@@ -10,7 +10,7 @@ source build (`java.base, java.logging, jdk.compiler`), which is what we ship. T
 |---|---|---|---|
 | stdout / stderr | allowed | per-byte devices, boot noise filtered, 1 MB cap → run torn down | slice spec: output-limit test |
 | stdin | allowed | MEMFS append file, driver polling | slice spec: sequential reads |
-| Outbound TCP (`java.net.Socket`) | **denied** (unsupported) | libnet not linked → `UnsatisfiedLinkError: InetAddress.init()`; no WebSocket opened | probe `socket`. SOCKFS→WebSocket path **still present in glue**; Phase 3 adds CSP `connect-src 'self'` and socket syscall overrides |
+| Outbound TCP (`java.net.Socket`) | **denied** (unsupported) | (1) libnet not linked → `UnsatisfiedLinkError: InetAddress.init()`; (2) CSP `connect-src 'self'` blocks any WebSocket/fetch egress from the page and runtime | probe `socket`; `security.spec.mjs` (fetch to another origin blocked). SOCKFS is still linked until N1 removes it |
 | `HttpURLConnection` | **denied** | `ExceptionInInitializerError` in `NioSocketImpl.<clinit>` | probe `http` |
 | DNS | **denied** | same as TCP | probe `dns` |
 | Read host/real filesystem (`/etc/passwd`) | **unsupported** | only MEMFS exists (`/tmp /home /dev /proc /root /work /opt`) | probe `fileOutside` |
@@ -26,3 +26,6 @@ source build (`java.base, java.logging, jdk.compiler`), which is what we ship. T
 | Threads in student code | unverified / out of scope | pool of 16 pthreads | — |
 | Doom graphics/audio/input natives | **present in the `.wasm`** (from `jvm-main.c`), unreachable: no Doom classes and no `java.desktop` in the trimmed image | removing them needs a JavaBox fork | — |
 | Spoofing driver control events | **allowed (residual)** | — | affects own console only |
+| Code/classes/JVM options chosen by URL parameters | **denied** | runtime host uses fixed same-origin paths; only `outputCap` (clamped) is read | `security.spec.mjs` S1 |
+| Framing by other sites | **denied** | CSP `frame-ancestors 'self'`, `X-Frame-Options: SAMEORIGIN` | `security.spec.mjs` S2/S7 |
+| Inline/foreign scripts and styles | **denied** | CSP `script-src 'self' 'wasm-unsafe-eval'`, `style-src 'self'`; editor in a shadow root uses constructed stylesheets | `security.spec.mjs` (no CSP violations during a full run) |

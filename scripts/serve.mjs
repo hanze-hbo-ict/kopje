@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// Static server with the headers SharedArrayBuffer needs. Usage: node scripts/serve.mjs [dir] [port]
+// Static server with the production security headers (security-headers.mjs).
+// Usage: node scripts/serve.mjs [dir] [port]
 import { createServer } from 'node:http';
+import { SECURITY_HEADERS } from '../security-headers.mjs';
 import { createReadStream, statSync } from 'node:fs';
 import { join, resolve, extname, normalize, sep } from 'node:path';
 
@@ -14,7 +16,7 @@ const TYPES = {
 createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   let p = normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '');
-  if (p === '' ) p = 'index.html';
+  if (p === '' || p === '.') p = 'index.html';
   const file = join(root, p);
   if (!(file + sep).startsWith(root + sep) && file !== root) { res.writeHead(403).end(); return; }
   let st;
@@ -23,10 +25,8 @@ createServer((req, res) => {
   res.writeHead(200, {
     'Content-Type': TYPES[extname(file)] || 'application/octet-stream',
     'Content-Length': st.size,
-    'Cross-Origin-Opener-Policy': 'same-origin',
-    'Cross-Origin-Embedder-Policy': 'require-corp',
-    'Cross-Origin-Resource-Policy': 'same-origin',
+    ...SECURITY_HEADERS,
     'Cache-Control': 'no-cache',
   });
   createReadStream(file).pipe(res);
-}).listen(port, '127.0.0.1', () => console.log(`serving ${root} on http://localhost:${port} (COOP/COEP on)`));
+}).listen(port, '127.0.0.1', () => console.log(`serving ${root} on http://localhost:${port} (security headers on)`));

@@ -41,8 +41,13 @@ export class JavaEditor {
 
   constructor(parent: HTMLElement, onChange: (path: string, text: string) => void) {
     this.onChange = onChange;
+    // Mounted in an open shadow root so CodeMirror's styles use constructed stylesheets
+    // instead of <style> elements, which the CSP (style-src 'self') blocks. App tokens
+    // (CSS custom properties) inherit through the shadow boundary.
+    const root = parent.shadowRoot ?? parent.attachShadow({ mode: 'open' });
     this.view = new EditorView({
-      parent,
+      parent: root,
+      root,
       dispatch: (tr) => {
         this.view.update([tr]);
         if (tr.docChanged) this.onChange(this.current, this.view.state.doc.toString());

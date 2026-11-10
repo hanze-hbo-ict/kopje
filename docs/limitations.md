@@ -8,9 +8,12 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
   iframe. Isolation rests on (a) no Java→JavaScript bridge in the runtime's host imports,
   (b) libnet not being linked, and (c) per-run teardown. A same-origin iframe is a
   termination boundary, **not** a security-origin boundary (Phase 5: separate origin).
-- **SOCKFS is still linked.** Java can't reach it today (`InetAddress.<clinit>` fails),
-  but Emscripten's `connect()` → WebSocket path exists in the glue. A CSP
-  `connect-src 'self'` header and socket syscall overrides are planned as a second layer.
+- **SOCKFS is still linked.** Java can't reach it (`InetAddress.<clinit>` fails), and the CSP
+  `connect-src 'self'` blocks WebSocket egress at the browser. Removing SOCKFS at link time
+  is planned (PLAN.md N1).
+- **Headers are part of the security model.** The CSP, COOP/COEP and framing headers come
+  from `security-headers.mjs`; a deployment must serve `dist/_headers` (or equivalent). A host
+  that drops them breaks Java (no `SharedArrayBuffer`) and removes the CSP.
 - **Control-event spoofing.** Student code can write to the driver's control device or input
   file via file APIs/reflection and fake its *own* status events (e.g. a fake "exit").
   Impact is limited to that student's console.

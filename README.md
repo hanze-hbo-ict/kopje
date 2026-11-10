@@ -27,16 +27,18 @@ npm run build                                       # -> dist/
 npm run serve                                       # http://127.0.0.1:5391/
 ```
 
-The page must be served with `Cross-Origin-Opener-Policy: same-origin` and
-`Cross-Origin-Embedder-Policy: require-corp` (`scripts/serve.mjs` and `vite preview` do).
-Any static host that can set those headers works; `dist/` is the whole deployment.
+The page must be served with the headers in `security-headers.mjs`: COOP/COEP for
+`SharedArrayBuffer`, plus the CSP and framing headers. `scripts/serve.mjs` and `vite preview`
+apply them, and the build writes `dist/_headers` for Netlify/Cloudflare-style hosts. Any
+static host that can set those headers works; `dist/` is the whole deployment. Production
+builds contain no test pages; `npm run build:test` adds `slice.html` for the e2e suite.
 
 ## Tests
 
 ```sh
 npm test                               # unit (paths) + driver on a host JDK 17+
 npx playwright install                 # once
-npm run build && npm run test:e2e      # Gate 2 slice, Gate 4 IDE, capability probes; 3 browsers
+npm run test:e2e                       # test build + Gate 2 slice, Gate 4 IDE, security, probes; 3 browsers
 ```
 
 ## Layout

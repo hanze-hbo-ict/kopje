@@ -21,7 +21,7 @@ export const highlighting = HighlightStyle.define([
 ]);
 
 export const editorTheme = EditorView.theme({
-  '&': { height: '100%', fontSize: '14px', backgroundColor: 'var(--panel)', color: 'var(--ink)' },
+  '&': { height: '100%', fontSize: '14px', backgroundColor: 'var(--panel)', color: 'var(--ink)', fontFamily: 'inherit' },
   '&.cm-focused': { outline: 'none' }, // the padded outer #editor supplies focus
   '.cm-scroller': { fontFamily: 'var(--mono)', overflow: 'auto', lineHeight: '1.8' },
   '.cm-content': { padding: '12px 0' },

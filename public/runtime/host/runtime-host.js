@@ -12,10 +12,15 @@
 const EOF_BYTE = 0x04;             // driver maps 0x04 to end-of-stream
 const FLUSH_MS = 16;
 
-const params = new URLSearchParams(location.search);
-const RUNTIME_BASE = params.get('runtime') || '../javabox/';
-const DRIVER_BASE = params.get('driver') || '../driver/';
-const OUTPUT_CAP = Number(params.get('outputCap') || 1_000_000);   // bytes
+// Security (PLAN.md §13 S1): asset locations are fixed and same-origin. No URL parameter
+// may choose code, classes or JVM options; outputCap is the only parameter and is clamped.
+const RUNTIME_BASE = new URL('../javabox/', location.href).href;
+const DRIVER_BASE = new URL('../driver/', location.href).href;
+const OUTPUT_CAP = (() => {
+  const raw = new URLSearchParams(location.search).get('outputCap');
+  const n = raw !== null && /^[0-9]{1,9}$/.test(raw) ? Number(raw) : 1_000_000;
+  return Math.min(Math.max(n, 1_000), 10_000_000);   // bytes
+})();
 
 const parentOrigin = location.origin;   // same-origin topology (Phase 5 may change this)
 const post = (event) => parent.postMessage({ type: 'event', event }, parentOrigin);
@@ -142,7 +147,6 @@ async function boot() {
     arguments: [
       '-Djavaedit.src=/work/src',
       '-Djavaedit.ctl=/dev/jectl',
-      ...params.getAll('jvmArg'),   // diagnostics only, e.g. ?jvmArg=-Xlog:startuptime
     ],
     preRun: [(M) => {
       const FS = M.FS;
