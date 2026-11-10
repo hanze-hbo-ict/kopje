@@ -276,6 +276,7 @@ Record measured cold start, repeat-run latency, JS heap/WASM memory, total asset
 - [ ] Baseline versus trimmed-runtime benchmarks.
 - [ ] `README.md` for development, build and deployment.
 - [ ] `docs/architecture.md`, `docs/capability-matrix.md`, `docs/licensing.md` and `docs/limitations.md`.
+- [ ] Security review findings S1–S9 (§13) mitigated or explicitly accepted, each with its verifying test.
 
 ## 11. Working conventions for the coding agent
 
@@ -298,3 +299,88 @@ Record measured cold start, repeat-run latency, JS heap/WASM memory, total asset
 - OpenJDK `jlink` documentation: https://docs.oracle.com/en/java/javase/21/docs/specs/man/jlink.html
 
 **First coding-agent action:** Inspect the upstream repository, run its demo, and report Gate 0 findings. Then implement a minimal two-file + interactive-stdin + Stop vertical slice before modifying UI or optimizing the JDK image.
+
+## 13. Security review findings and mitigations (2026-11-10)
+
+Review of the implementation after Phases 0–4 (code reading plus the capability probes in
+`tests/e2e/capabilities.spec.mjs`; no exploit was built). **Threat model:** there is no
+project sharing, so untrusted code reaches the IDE when a user types or pastes it, e.g. a
+snippet from a peer or the internet. A second attacker is anyone who can get a user to
+open a crafted link to the deployed origin. Findings are ordered by priority. Each one is
+closed only when its verifying test exists and passes, or when the owner explicitly accepts
+the residual risk in `docs/limitations.md`.
+
+| ID | Severity | Finding | Mitigation | Phase | Verification |
+|---|---|---|---|---|---|
+| S1 | **High** | `public/runtime/host/runtime-host.js` trusts URL parameters: `?runtime=` sets the URL that `javabox-direct.mjs` is imported from, `?driver=` the URL the driver classes are fetched from, `?jvmArg=` adds JVM options (honoured by the source build). A crafted link (`…/runtime/host/runtime.html?runtime=https://evil.example/`) runs attacker JavaScript on our origin; COEP doesn't prevent it, because the attacker can serve CORS/CORP headers. | Remove `runtime`, `driver` and `jvmArg`; hard-code same-origin relative paths. Keep only `outputCap`, parsed as a bounded integer. Diagnostics that need JVM flags use a dev-only build flag, not a URL parameter. | 3 (now) | e2e: loading `runtime.html?runtime=<other origin>` makes no request to that origin and still boots the local runtime; unit/grep check that the host reads no other parameters. |
+| S2 | **High** | No Content-Security-Policy on any page, so nothing limits script sources, network egress or framing. | Serve a CSP on all responses: `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'` (relax `frame-ancestors` to `'self'` for the runtime iframe document only). Add it to `scripts/serve.mjs`, `vite.config.ts` (dev/preview) and a deployment headers file (`_headers` / `netlify.toml` or equivalent), and document it in the README. Verify Emscripten pthread Workers and WASM instantiation still work in all three engines. | 3 (now) | e2e: CSP header present on `/`, `/runtime/host/runtime.html`, assets; a `fetch('https://example.com')` from the page is blocked; Gate 2/4 suites still pass in Chromium, Firefox, WebKit. |
+| S3 | Medium | Emscripten SOCKFS is linked, and its `connect()` opens `new WebSocket(ws://host:port)`. Java can't reach it today (`InetAddress.<clinit>` fails because libnet is not linked), but a memory-corruption bug in the WASM JVM (new C++ port of HotSpot Zero) could call the socket syscalls directly, which would be network egress. | Defence in depth: (a) CSP `connect-src 'self'` (S2) blocks WebSocket egress at the browser; (b) leave socket support out at link time in our own link step (N1 in §14), so socket syscalls fail with an error instead of reaching SOCKFS; (c) keep libnet unlinked. | 3 | Capability probes still deny `Socket`/HTTP/DNS; a test that calls the socket syscall path from JS inside the runtime iframe gets an error and opens no WebSocket (`page.on('websocket')` stays empty). |
+| S4 | Medium | The runtime iframe is **same-origin** with the IDE. Any escape from WASM into JavaScript (glue bug, future host import, S1-style injection) gives full control of the IDE page, its DOM and `sessionStorage`. | Phase 5: serve the runtime from a dedicated origin (separate subdomain or host) in an iframe with `sandbox="allow-scripts"` (no `allow-same-origin` relative to the IDE), validated `postMessage` with explicit `targetOrigin` on both sides, COOP/COEP/CORP and CSP on the runtime origin. Until then, document the IDE as not safe for adversarial code. | 5 | Gate 5: from inside the runtime frame, `parent.document`, `parent.sessionStorage` and IDE cookies are inaccessible; IDE stays responsive when the runtime hangs or is torn down. |
+| S5 | Medium | **Hosting on a shared origin** (e.g. a school domain that also serves other apps) would turn S1/S4 into access to other apps' cookies and storage. | Deploy the IDE on its own origin (dedicated subdomain), and the runtime on another (S4). No cookies are set by the IDE; keep it that way. Record the hosting requirement in the README and a deployment checklist. | 4/5 (deployment) | Deployment checklist reviewed; response headers checked by a smoke test against the deployed URL. |
+| S6 | Low | `slice.html` (engine test page exposing `window.engine`) and the diagnostic e2e entry points are built into `dist/` and would be deployed. | Build `slice.html` only for tests (separate Vite mode or `E2E=1`), or move it under a test-only directory excluded from production builds. Production `dist/` contains only `index.html`, assets, runtime and notices. | 4 | Build check: production `dist/` has no `slice.html`; e2e builds include it. |
+| S7 | Low | Clickjacking: other sites can frame the IDE. | `frame-ancestors 'none'` on the IDE (part of S2) and `X-Frame-Options: DENY` for older browsers; the runtime document allows only `'self'` (later: the IDE origin). | 3 | Header test as in S2; framing the IDE from another origin fails. |
+| S8 | Low | Supply chain: (a) JavaBox, its OpenJDK fork and libffi are single-maintainer repos (pinned by commit); (b) the upstream prebuilt is fetched from a `workers.dev` demo without an integrity pin; (c) `@playwright/test` uses a `^` range; (d) runtime assets served without integrity verification by the page. | (a) Keep the three repos pinned by commit (no fork, by decision 2026-11-10); review the upstream diff, including our two overridden files (N1), on every bump. (b) Never deploy the prebuilt (it also contains GPL Doom code); if it's used in dev, pin its SHA-256 in `scripts/prepare-runtime.mjs` and refuse mismatches. (c) Pin all npm versions exactly; commit the lockfile; use `npm ci`. (d) Record SHA-256 of `javabox-direct.{mjs,wasm,data}` and driver classes in `runtime.json` (exists) and verify them in CI before deployment. | 3 | CI step verifies pins and fails on mismatch; `package.json` has no ranges. |
+| S9 | Low (accepted risks, document) | (a) Student code can write to the driver's control device or the stdin file and spoof its *own* status events (fake exit, fake diagnostics); rendering is via `textContent`, so no XSS. (b) Resource use up to 2 min wall clock, 512 MB WASM per context (max. two contexts), 1 MB output, on the user's own device only. (c) Source code sits in plaintext `sessionStorage`; tab/session restore on shared computers can bring it back. | (a) Keep `textContent`-only rendering and the existing message validation; add a regression test that a spoofed diagnostic containing HTML renders as text. Optional: a per-run random token in control events (raises the bar, doesn't eliminate). (b) Keep limits; consider a lower default timeout and a visible memory note. (c) Tell users in the UI or footer; offer a "Clear project" action that removes the stored session. | 4 | XSS regression test; limits covered by existing timeout/output tests; "Clear project" e2e. |
+
+Already in place, and kept as defence in depth (not the security boundary): path
+validation and size limits (`src/project/paths.ts`, driver), stripping control characters
+from user input with the reserved EOF byte, the single-use GO control line, `postMessage`
+origin/source checks on both sides, the student class loader parented to the platform
+loader, disposable runtime per run, libnet/process/native loading unavailable (verified by
+capability probes).
+
+**Order of work:** S1, S2, S6, S7 first (small changes, and they close the only concrete
+exploit); then S3, S8; then Phase 5 (S4, S5); S9 items alongside the IDE work.
+Update `docs/capability-matrix.md` and `docs/limitations.md` as each item lands.
+
+## 14. Exam use: context and resulting priorities (2026-11-10)
+
+**Context.** The IDE is used during exams on university-supplied systems. We control only
+this website; the browser, exam procedure and machines can't be changed by us or by
+students. Known from Klode's documentation (same exam setting): Microsoft Edge on a
+restricted Windows exam laptop, a network whitelist, and answers handed in by native
+copy/paste into ans.app. Our own origin can be whitelisted when needed. Verification on
+the exam laptop and in real Edge is out of scope for this plan; the owner does it when
+necessary.
+
+**Consequences for the design**
+
+- Serve everything from **one HTTPS origin** (already true: no CDN, no external requests),
+  so one whitelist entry is enough.
+- **Chromium/Edge is the primary target.** Firefox and WebKit stay supported but are
+  secondary; mobile layout is not a priority.
+- Phase 5 isolation should use the **opaque-origin sandboxed iframe**
+  (`sandbox="allow-scripts"`, no second origin, no extra whitelist entry). Feasibility
+  probe (2026-11-10): parent DOM and `sessionStorage` are blocked in all three engines,
+  `SharedArrayBuffer` and shared WASM memory work, and cross-origin module import and
+  fetch work with CORS. URL-based Workers are refused, and Chromium refuses blob *module*
+  Workers but accepts classic blob Workers. So pthreads need a classic-blob worker
+  wrapper through Emscripten's `mainScriptUrlOrBlob`, which buffers messages until the
+  module has loaded. Not yet verified end to end with JavaBox.
+
+**Exam work items, in order**
+
+| ID | Item | Acceptance |
+|---|---|---|
+| E1 | **Copy for Ans.** Native copy from the editor is exact (indentation, tabs, non-ASCII). Add **"Copy all files"**: one text block, each file preceded by a header line `// File: <path>`. Add "Copy file". Show a short confirmation; if the Clipboard API is refused, fall back to selecting the text for manual copying. | e2e: clipboard contents equal the sources byte for byte (incl. Unicode and indentation) for one and for multiple files; the fallback path is tested with clipboard permission denied. |
+| E2 | **Paste project.** An import dialog that accepts the E1 format (or a single class without headers) and replaces or merges the project after confirmation; paths validated with the existing rules. Used for starter code copied from an exam question. | unit: round trip E1 → E2 is lossless; malformed headers and invalid paths are rejected with a message; e2e: paste a three-file project and run it. |
+| E3 | **Security S1, S2 (CSP incl. `frame-ancestors`), S6, S7** from §13, before any exam use. | as in §13. |
+| E4 | **Don't lose work by accident.** `beforeunload` warning while the project differs from the template; keep `sessionStorage` recovery after reload (§1). A visible **"New project"** action that resets to the template after confirmation, and clears stored state. | e2e: reload restores; "New project" clears storage; the unload prompt is registered when the project was changed. |
+| E5 | **Loading at exam start.** Hashed, immutable asset and runtime file names with long cache lifetimes; HTML revalidated; precompressed (brotli/gzip) runtime files; a deployment headers file for the chosen static host. Optional: a service worker that caches the runtime so Run keeps working through brief network outages. | Header test on a production-like server; a second page load transfers < 100 KB; optional service-worker test with the network disabled after the first load. |
+| E6 | **Memory.** Measure peak memory for boot + run + spare in Edge/Chromium; skip pre-booting the spare runtime when `performance.memory`/`deviceMemory` indicate a low-memory device, or after a failed allocation. | Measurement recorded in `docs/baseline.md`; a test that forces "no prewarm" still runs programs correctly. |
+| F1 | **File I/O.** Make `java.io` and `java.nio.file` reads and writes work on MEMFS (today `Files.writeString("/tmp/x.txt")` fails with *No such file or directory*). Working hypothesis, not yet verified: the class library is jlinked from the **macOS** JDK, so generated platform constants such as `sun.nio.fs.UnixConstants` (`O_CREAT`, `O_EXCL`, …) carry macOS values that differ from Emscripten's. Fix without a fork, e.g. a corrected class supplied through `--patch-module java.base=…` (the source build honours JVM arguments) or by jlinking from a Linux JDK with matching values. Files stay ephemeral per run (MEMFS). | Fixtures: write, append, read back, list, delete via `java.io` and `java.nio.file`; reading `/etc/passwd`-style host paths still fails; capability matrix updated. |
+| N1 | **Own native entry point and link step (no fork).** Keep JavaBox pinned and unmodified. `scripts/build-runtime-source.sh` places our own `runtime/native/jvm-main.c` into the build copy and links with our own command instead of `link-direct-wasm.sh`. Our `jvm-main.c` drops the Doom, audio and AWT natives and their 10 exports (56 symbols, ~69 KB incl. a 67 KB static audio buffer), the misplaced `EM_JS` FS/stdin hooks, and fixes the stdin futex lost-wakeup. Our link step omits socket support (S3), lowers initial memory and sizes the pthread pool to what is needed (E6). Both files are diffed against upstream on every JavaBox bump. | The `.wasm` exports and the static JNI symbol table contain no Doom/AWT symbols; Gate 2/4 suites and capability probes pass; memory before/after recorded in `docs/baseline.md`. |
+| E7 | **Java correctness checks that matter in exams:** UTF-8 output and input (e.g. `"café"`, `"€"`), `Scanner` with `nextInt` mixed with `nextLine`, empty input lines, long output, exceptions with causes. | Fixtures + e2e assertions on exact output. |
+
+**Deprioritised for exam use:** file download/zip/import from disk, starter-code links in
+the URL, Dutch UI, in-app font size, mobile layout, JUnit/Swing/threads/file I/O (unless
+exam questions need them), a separate runtime origin.
+
+**Decisions (2026-11-10):**
+- Keep `sessionStorage` recovery after reload (§1); Klode's no-recovery behaviour is not adopted.
+- No fork of JavaBox. Upstream stays pinned and unmodified; we maintain our own
+  `jvm-main.c` and link step (N1) instead.
+- Accepted without fixing: the JVM's `Finalizer`/`Common-Cleaner` threads die at boot;
+  input goes through the MEMFS file channel rather than the upstream ring buffer.
+- Not pursued: the one-off 10× Firefox/WebKit slowdown observed in a single full e2e run
+  (`docs/baseline.md`).
