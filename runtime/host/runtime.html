@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>javaedit runtime</title>
+  <!-- Disposable execution context: one JVM per document. The parent removes this
+       iframe to stop a run, which also terminates every Emscripten pthread Worker. -->
+</head>
+<body>
+  <script type="module" src="./runtime-host.js"></script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Runtime Slice</title>
+  <style>
+    :root { --bg: #fff; --fg: #1d1d1f; --muted: #6b6b70; --err: #b3261e; --line: #d9d9de; }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #161618; --fg: #ececf0; --muted: #9a9aa2; --err: #ff8a80; --line: #34343a; } }
+    :root[data-theme="dark"] { --bg: #161618; --fg: #ececf0; --muted: #9a9aa2; --err: #ff8a80; --line: #34343a; }
+    body { background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; margin: 0; padding: 16px; }
+    textarea, pre, input { font: 13px/1.45 ui-monospace, Menlo, monospace; }
+    textarea { width: 100%; height: 160px; box-sizing: border-box; }
+    pre#out { border: 1px solid var(--line); padding: 8px; min-height: 120px; white-space: pre-wrap; word-break: break-word; }
+    .stderr { color: var(--err); } .sys { color: var(--muted); }
+    .row { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <!-- Phase 2 vertical slice: not the IDE. Drives JavaBoxEngine for manual and Playwright tests. -->
+  <div class="row">
+    <label>Main class <input id="main" value="example.Main"></label>
+    <button id="run">Run</button><button id="stop">Stop</button>
+    <span id="status" role="status">booting…</span>
+  </div>
+  <div class="row"><label>example/Main.java</label></div>
+  <textarea id="f1" aria-label="example/Main.java">package example;
+
+import java.util.Scanner;
+
+public class Main {
+    public static void main(String[] args) {
+        Scanner in = new Scanner(System.in);
+        System.out.print("Name? ");
+        String name = in.nextLine();
+        System.out.println("Hello " + name + ", 2 + 3 = " + new Calculator().add(2, 3));
+    }
+}
+</textarea>
+  <div class="row"><label>example/Calculator.java</label></div>
+  <textarea id="f2" aria-label="example/Calculator.java">package example;
+
+public class Calculator {
+    public int add(int a, int b) { return a + b; }
+}
+</textarea>
+  <pre id="out" aria-live="polite"></pre>
+  <form id="inform" class="row"><input id="stdin" aria-label="Program input" autocomplete="off"><button>Send</button><button type="button" id="eof">EOF</button></form>
+  <script type="module">
+    import { JavaBoxEngine } from './engine/JavaBoxEngine.js';
+    const $ = (id) => document.getElementById(id);
+    const out = $('out'), status = $('status');
+    const append = (text, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = text; out.append(s); };
+    const engine = new JavaBoxEngine();
+    window.engine = engine;
+    window.events = [];
+    const t0 = performance.now();
+    engine.initialize().then(() => { status.textContent = 'ready'; window.bootMs = Math.round(performance.now() - t0); },
+                             (e) => { status.textContent = 'boot failed: ' + e.message; });
+    $('run').onclick = async () => {
+      out.textContent = ''; window.events = [];
+      status.textContent = 'starting';
+      const files = { 'example/Main.java': $('f1').value, 'example/Calculator.java': $('f2').value };
+      const started = performance.now();
+      const result = await engine.run(files, $('main').value, (ev) => {
+        window.events.push(ev);
+        if (ev.kind === 'stdout') append(ev.text);
+        else if (ev.kind === 'stderr') append(ev.text, 'stderr');
+        else if (ev.kind === 'compiled' && !ev.ok) for (const d of ev.diagnostics) append(`${d.file}:${d.line}:${d.column}: ${d.severity}: ${d.message}\n`, 'stderr');
+        else if (ev.kind !== 'log') status.textContent = ev.kind;
+      });
+      window.lastResult = { ...result, ms: Math.round(performance.now() - started) };
+      append(`\n[${result.status}${result.code !== undefined ? ' ' + result.code : ''}]\n`, 'sys');
+      status.textContent = result.status;
+    };
+    $('stop').onclick = () => engine.stop();
+    $('inform').onsubmit = (e) => { e.preventDefault(); append($('stdin').value + '\n', 'sys'); engine.sendInput($('stdin').value + '\n'); $('stdin').value = ''; };
+    $('eof').onclick = () => engine.sendEof();
+  </script>
+</body>
+</html>
