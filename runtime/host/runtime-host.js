@@ -162,9 +162,8 @@ addEventListener('message', (e) => {
 // ── boot ───────────────────────────────────────────────────────────────────────
 let assetsReceived = false;
 
-/** gzip-compressed bytes (E5) -> ArrayBuffer, or the bytes as-is when not compressed. */
-async function inflate(bytes, compressed) {
-  if (!compressed) return bytes;
+/** gzip-compressed bytes (E5) -> ArrayBuffer. */
+async function inflate(bytes) {
   return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
 }
 
@@ -216,8 +215,8 @@ async function boot(assets) {
   const moduleUrl = URL.createObjectURL(new Blob([assets.module], { type: 'text/javascript' }));
   const [{ default: createModule }, wasmModule, dataPackage] = await Promise.all([
     import(moduleUrl),
-    inflate(assets.wasm, assets.compressed).then((b) => { wasmBytesForWorkers = b; return WebAssembly.compile(b); }),
-    inflate(assets.data, assets.compressed),
+    inflate(assets.wasm).then((b) => { wasmBytesForWorkers = b; return WebAssembly.compile(b); }),
+    inflate(assets.data),
   ]);
   post({ kind: 'initializing' });
 

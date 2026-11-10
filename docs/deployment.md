@@ -5,6 +5,11 @@
 
 ## Hosting requirements
 
+Recommended: **Cloudflare Pages** (free tier: unlimited bandwidth; it applies `dist/_headers`).
+Its limits that matter: 25 MiB per file (the largest file is the ~10 MB `javabox-direct.data.gz`;
+`verify:dist` enforces the limit) and 20,000 files per site. GitHub Pages cannot set response
+headers, so Java cannot start there.
+
 - [ ] **Own HTTPS origin** (dedicated host or subdomain, e.g. `java.example.org`). Don't
   share an origin with other apps: anything that ever ran script on this origin could reach
   their cookies and storage (S5). The IDE sets no cookies; keep it that way.
@@ -25,7 +30,28 @@
 - [ ] For exams: put the origin on the exam network's whitelist. All requests go to this one
   origin; nothing loads from a CDN.
 
-## Build and verify
+## Build and deploy with GitHub Actions
+
+`.github/workflows/deploy.yml` does everything below on a macOS/arm64 runner (the runtime uses
+the macOS class library, ADR-8), with Emscripten pinned through emsdk, and deploys `dist/` with
+Wrangler on every push to `main`. The built runtime is cached on its inputs (JavaBox commit,
+build scripts, `runtime/native/`, emsdk version), so only a runtime change rebuilds it.
+
+Setup, once:
+1. Create a Cloudflare Pages project (Direct Upload) named `kopje`, or set the repository
+   variable `CLOUDFLARE_PAGES_PROJECT`. Production branch: `main`. Give it its own custom domain.
+2. Add repository secrets `CLOUDFLARE_API_TOKEN` (permission *Cloudflare Pages: Edit*) and
+   `CLOUDFLARE_ACCOUNT_ID`. Without them the workflow builds and uploads `dist` as an artifact
+   only.
+3. CI's Emscripten (emsdk) is a different build from Homebrew's, so its runtime may not match
+   a `runtime.lock.json` made locally. Run the workflow manually with **update lock**; it
+   uploads the new `runtime.lock.json` as an artifact without deploying. Review and commit it.
+   Do the same after any deliberate runtime change.
+
+On macOS runners, private repositories use GitHub Actions minutes at 10x; the uncached runtime
+build is the expensive part.
+
+## Build and verify locally
 
 ```sh
 git submodule update --init --recursive
@@ -42,7 +68,9 @@ npm run verify:dist                                   # must print "verify: OK"
 - a runtime file differs from its recorded SHA-256 (`runtime.json`);
 - the runtime is not a Kopje source build: the upstream prebuilt contains GPL Doom code
   and must never be deployed;
-- the runtime differs from **`runtime.lock.json`**. After a deliberate runtime change
+- a raw `.wasm`/`.data` is shipped, a `.gz` does not decompress to the recorded content, or a
+  runtime file exceeds 25 MiB (Cloudflare Pages' limit);
+- the runtime differs from **`runtime.lock.json`** (pinned on the uncompressed content). After a deliberate runtime change
   (new JavaBox pin, module set, JVM options), review the diff and update the lock with
   `node scripts/verify.mjs dist --lock`, then commit it.
 

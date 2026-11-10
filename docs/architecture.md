@@ -159,8 +159,9 @@ aarch64 `O_*` flags differ too, and Linux classes call other unlinked natives
 into `public/runtime/<hash>/`, where `<hash>` covers every file. The path is generated into
 `src/runtime/runtime-location.generated.ts` and bundled into the hashed app script, so only
 `index.html` is revalidated (`no-cache`); `/assets/*` and `/runtime/*` are cached for a year
-as `immutable`. The `.wasm` and `.data` also ship as `.gz`, which the runtime host fetches and
-decompresses with `DecompressionStream`, handing the results to Emscripten through
+as `immutable`. The `.wasm` and `.data` ship **only** as `.gz` (the raw `.data` is ~33 MB, over
+Cloudflare Pages' 25 MiB per-file limit), which the runtime host fetches and decompresses with
+`DecompressionStream` (required; all current browsers have it), handing the results to Emscripten through
 `instantiateWasm` and `getPreloadedPackage`; this makes transfer size independent of whether
 the static host compresses binary types. The jimage is linked uncompressed (`zip-0`), which
 gzips far better (10.3 MB vs 14.5 MB). Measured (Chromium, persistent profile): first load

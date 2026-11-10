@@ -42,8 +42,9 @@ hand):
 | **Source build, minimal modules, no ct.sym** | 3.20 MB | **15.6 MB** | 2.0 s |
 
 `scripts/prepare-runtime.mjs` assembles `public/runtime/<hash>/{host,driver,javabox}`: the
-runtime iframe from `runtime/host/`, the compiled driver, the JavaBox files plus `.gz`
-variants of `.wasm`/`.data`, and `runtime.json` (version, SHA-256s, build info). It writes the
+runtime iframe from `runtime/host/`, the compiled driver, the JavaBox `.mjs` plus gzip-only
+`.wasm.gz`/`.data.gz`, and `runtime.json` (version, SHA-256s of the shipped files and of the
+uncompressed `.wasm`/`.data`, build info). It writes the
 versioned path to `src/runtime/runtime-location.generated.ts` (ADR-9). It prefers
 `$RUNTIME_DIR`, then `~/kopje-build/out-minimal`, then `runtime-prebuilt/`.
 

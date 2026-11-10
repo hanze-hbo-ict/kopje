@@ -32,7 +32,9 @@ npm run serve                                       # http://127.0.0.1:5391/
 The page must be served with the headers in `security-headers.mjs`: COOP/COEP for
 `SharedArrayBuffer`, plus the CSP and framing headers. `scripts/serve.mjs` and `vite preview`
 apply them, and the build writes `dist/_headers` for Netlify/Cloudflare-style hosts. Any
-static host that can set those headers works; `dist/` is the whole deployment. Production
+static host that can set those headers works (not GitHub Pages); `dist/` is the whole
+deployment. `.github/workflows/deploy.yml` builds it and deploys to Cloudflare Pages; see
+`docs/deployment.md`. Production
 builds contain no test pages; `npm run build:test` adds `slice.html` for the e2e suite.
 
 ## Tests

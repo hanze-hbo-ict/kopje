@@ -6,6 +6,7 @@
 import { readFileSync, existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
+import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -44,7 +45,18 @@ if (distArg) {
     if (!info.build.some((l) => l.startsWith('link: own jvm-main.c'))) {
       fail('the runtime is not a Kopje source build (scripts/build-runtime-source.sh); never deploy the upstream prebuilt');
     }
-    const pinned = Object.fromEntries(['javabox-direct.mjs', 'javabox-direct.wasm', 'javabox-direct.data'].map((f) => [f, info.files[f].sha256]));
+    // Large binaries ship gzip-only (25 MiB per-file limit on Cloudflare Pages); no file may exceed it.
+    for (const [file, { bytes }] of Object.entries(info.files)) if (bytes > 25 * 1024 * 1024) fail(`runtime file ${file} is over 25 MiB`);
+    for (const raw of ['javabox-direct.wasm', 'javabox-direct.data']) {
+      if (existsSync(join(base, raw))) fail(`runtime file ${raw} ships uncompressed; only ${raw}.gz belongs in dist`);
+      const sha = createHash('sha256').update(gunzipSync(readFileSync(join(base, `${raw}.gz`)))).digest('hex');
+      if (sha !== info.uncompressed?.[raw]?.sha256) fail(`${raw}.gz does not decompress to the content recorded in runtime.json`);
+    }
+    const pinned = {
+      'javabox-direct.mjs': info.files['javabox-direct.mjs'].sha256,
+      'javabox-direct.wasm': info.uncompressed['javabox-direct.wasm'].sha256,
+      'javabox-direct.data': info.uncompressed['javabox-direct.data'].sha256,
+    };
     if (flag === '--lock') {
       writeFileSync(LOCK, JSON.stringify({ note: 'SHA-256 of the deployed runtime; update with `node scripts/verify.mjs dist --lock` after a deliberate runtime change', build: info.build, files: pinned }, null, 2) + '\n');
       console.log(`wrote ${LOCK}`);

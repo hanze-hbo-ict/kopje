@@ -1,0 +1,108 @@
+# Builds the JavaBox runtime from source, builds dist/, verifies it and deploys it to
+# Cloudflare Pages (docs/deployment.md).
+#
+# macOS/arm64 on purpose: the runtime uses the macOS class library (ADR-8) and
+# scripts/build-runtime-source.sh fetches the matching Temurin build for that platform.
+# The finished runtime is cached on all of its inputs, so only the first run or a runtime
+# change pays for the WASM build.
+#
+# Deploy needs repository secrets CLOUDFLARE_API_TOKEN (Pages: Edit) and CLOUDFLARE_ACCOUNT_ID,
+# and optionally the variable CLOUDFLARE_PAGES_PROJECT (default "kopje"). Without them the
+# workflow only builds and uploads dist/ as an artifact.
+#
+# The workflow is run manually with "update lock" ticked after a deliberate runtime change
+# (or the first time CI builds the runtime with a different Emscripten build than your
+# machine). It then writes runtime.lock.json from the build, uploads it, and does not deploy.
+# Review the file and commit it.
+name: deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      update_lock:
+        description: Write runtime.lock.json from this build (no deploy)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  EMSDK_VERSION: 5.0.2
+  KOPJE_BUILD_DIR: /Users/runner/kopje-build
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: actions/setup-node@v4
+        with: { node-version: 25 }
+      - uses: actions/setup-java@v4   # javac for the driver classes and the host tests
+        with: { distribution: temurin, java-version: 21 }
+
+      - name: Runtime cache key
+        id: key
+        run: echo "javabox=$(git -C vendor/javabox rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Restore runtime
+        id: runtime
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.KOPJE_BUILD_DIR }}/out-minimal
+          key: runtime-${{ runner.os }}-${{ runner.arch }}-emsdk${{ env.EMSDK_VERSION }}-${{ steps.key.outputs.javabox }}-${{ hashFiles('scripts/build-runtime-source.sh', 'scripts/build-nio-patch.sh', 'runtime/native/**') }}
+
+      - name: Build tools (autotools, GNU grep, Emscripten ${{ env.EMSDK_VERSION }})
+        if: steps.runtime.outputs.cache-hit != 'true'
+        run: |
+          brew install autoconf automake libtool grep
+          echo "$(brew --prefix grep)/libexec/gnubin" >> "$GITHUB_PATH"
+          git clone --depth 1 --branch "$EMSDK_VERSION" https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install "$EMSDK_VERSION"
+          "$RUNNER_TEMP/emsdk/emsdk" activate "$EMSDK_VERSION"
+      - name: Build runtime from source
+        if: steps.runtime.outputs.cache-hit != 'true'
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          scripts/build-runtime-source.sh --modules minimal
+
+      - run: npm ci
+      - name: Build dist
+        run: npm run build
+        env:
+          RUNTIME_DIR: ${{ env.KOPJE_BUILD_DIR }}/out-minimal
+      - run: npm test
+
+      - name: Update runtime.lock.json
+        if: inputs.update_lock
+        run: node scripts/verify.mjs dist --lock && cat runtime.lock.json
+      - uses: actions/upload-artifact@v4
+        if: inputs.update_lock
+        with: { name: runtime-lock, path: runtime.lock.json }
+
+      - name: Verify dist
+        run: npm run verify:dist
+      - uses: actions/upload-artifact@v4
+        with: { name: dist, path: dist, include-hidden-files: true }
+
+  deploy:
+    needs: build
+    if: ${{ !inputs.update_lock && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist }
+      - name: Deploy to Cloudflare Pages
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: npx --yes wrangler@4.153.0 pages deploy dist --project-name "${{ vars.CLOUDFLARE_PAGES_PROJECT || 'kopje' }}" --branch main
+      - name: No Cloudflare credentials
+        if: env.CLOUDFLARE_API_TOKEN == ''
+        run: echo "::notice::CLOUDFLARE_API_TOKEN not set; dist/ was built and uploaded as an artifact but not deployed."

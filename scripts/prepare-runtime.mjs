@@ -3,7 +3,7 @@
 //
 //   public/runtime/<version>/host/      runtime iframe (from runtime/host/)
 //   public/runtime/<version>/driver/    Kopje driver classes + manifest.json
-//   public/runtime/<version>/javabox/   JavaBox module (.mjs, .wasm, .data) + .gz variants
+//   public/runtime/<version>/javabox/   JavaBox module (.mjs, .wasm.gz, .data.gz)
 //                                       + runtime.json (sizes, SHA-256, build info)
 //
 // <version> is a hash of every file, so a changed runtime always gets a new URL and can be
@@ -42,11 +42,16 @@ writeFileSync(join(driver, 'manifest.json'), JSON.stringify({ classes }, null, 2
 
 const javabox = join(stage, 'javabox');
 mkdirSync(javabox);
-for (const f of FILES) cpSync(join(runtimeDir, f), join(javabox, f));
-// gzip variants of the two large binaries. Static hosts often don't compress binary types,
-// so the runtime host fetches these and decompresses them itself (DecompressionStream).
+cpSync(join(runtimeDir, 'javabox-direct.mjs'), join(javabox, 'javabox-direct.mjs'));
+// The two large binaries ship gzip-only. Static hosts often don't compress binary types, so
+// the runtime host decompresses them itself (DecompressionStream); and the raw .data (~33 MB)
+// would exceed Cloudflare Pages' 25 MiB per-file limit. runtime.json records the SHA-256 of
+// the uncompressed content too, so runtime.lock.json pins the runtime, not gzip's output.
+const uncompressed = {};
 for (const f of ['javabox-direct.wasm', 'javabox-direct.data']) {
-  writeFileSync(join(javabox, `${f}.gz`), gzipSync(readFileSync(join(javabox, f)), { level: zlib.Z_BEST_COMPRESSION }));
+  const raw = readFileSync(join(runtimeDir, f));
+  uncompressed[f] = { bytes: raw.length, sha256: createHash('sha256').update(raw).digest('hex') };
+  writeFileSync(join(javabox, `${f}.gz`), gzipSync(raw, { level: zlib.Z_BEST_COMPRESSION }));
 }
 
 // Version = hash over every file's path and content.
@@ -63,7 +68,7 @@ for (const p of all) {
 }
 const version = h.digest('hex').slice(0, 12);
 const buildInfo = existsSync(join(runtimeDir, 'BUILD_INFO')) ? readFileSync(join(runtimeDir, 'BUILD_INFO'), 'utf8').trim().split('\n') : [];
-writeFileSync(join(javabox, 'runtime.json'), JSON.stringify({ version, source: runtimeDir, build: buildInfo, files: summary }, null, 2) + '\n');
+writeFileSync(join(javabox, 'runtime.json'), JSON.stringify({ version, source: runtimeDir, build: buildInfo, files: summary, uncompressed }, null, 2) + '\n');
 
 rmSync(OUT_ROOT, { recursive: true, force: true });
 mkdirSync(OUT_ROOT, { recursive: true });

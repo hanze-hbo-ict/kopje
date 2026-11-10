@@ -44,9 +44,8 @@ export type RunResult =
 /** Runtime files handed to the sandboxed frame (it has no network access). */
 export interface RuntimeAssets {
   module: string;                       // javabox-direct.mjs source
-  wasm: ArrayBuffer;                    // javabox-direct.wasm(.gz)
-  data: ArrayBuffer;                    // javabox-direct.data(.gz)
-  compressed: boolean;                  // true: wasm/data are gzip
+  wasm: ArrayBuffer;                    // javabox-direct.wasm.gz (gzip)
+  data: ArrayBuffer;                    // javabox-direct.data.gz (gzip)
   driver: [string, ArrayBuffer][];      // driver class files
 }
 

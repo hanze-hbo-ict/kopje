@@ -81,6 +81,8 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
 
 ## Distribution
 
+- Needs `DecompressionStream` (Chrome/Edge 80+, Firefox 113+, Safari 16.4+): the runtime ships
+  gzip-only. Older browsers get a clear error instead of Java.
 - First load transfers ~12 MB (runtime `.gz` files, decompressed in the browser); later loads
   come from the HTTP cache (0.8 KB measured). The host must keep `/runtime/*` and
   `/assets/*` cacheable (`dist/_headers`). Each runtime holds the ~35 MB uncompressed class

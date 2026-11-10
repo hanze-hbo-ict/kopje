@@ -37,8 +37,9 @@ const DEFAULTS: EngineOptions = {
 
 /**
  * The sandboxed runtime frame fetches nothing (CSP connect-src 'none'); this page loads the
- * runtime files once and hands a copy to every new frame. gzip variants are used when the
- * browser can decompress them (E5).
+ * runtime files once and hands a copy to every new frame. The .wasm and .data ship gzip-only
+ * (E5; also keeps every file under Cloudflare Pages' 25 MiB limit), so the browser must have
+ * DecompressionStream (all current browsers, Baseline 2023).
  */
 let assetsPromise: Promise<RuntimeAssets> | null = null;
 function loadAssets(runtimeUrl: string): Promise<RuntimeAssets> {
@@ -49,17 +50,18 @@ function loadAssets(runtimeUrl: string): Promise<RuntimeAssets> {
       if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
       return res;
     };
-    const compressed = typeof DecompressionStream === 'function';
-    const ext = compressed ? '.gz' : '';
+    if (typeof DecompressionStream !== 'function') {
+      throw new Error('This browser is too old to run Java here (no DecompressionStream). Use a current Chrome, Edge, Firefox or Safari.');
+    }
     const manifest = (await (await get('driver/manifest.json')).json()) as { classes: string[] };
     const [module, wasm, data, driver] = await Promise.all([
       get('javabox/javabox-direct.mjs').then((r) => r.text()),
-      get(`javabox/javabox-direct.wasm${ext}`).then((r) => r.arrayBuffer()),
-      get(`javabox/javabox-direct.data${ext}`).then((r) => r.arrayBuffer()),
+      get('javabox/javabox-direct.wasm.gz').then((r) => r.arrayBuffer()),
+      get('javabox/javabox-direct.data.gz').then((r) => r.arrayBuffer()),
       Promise.all(manifest.classes.map(async (name) =>
         [name, await (await get(`driver/${encodeURIComponent(name)}`)).arrayBuffer()] as [string, ArrayBuffer])),
     ]);
-    return { module, wasm, data, compressed, driver };
+    return { module, wasm, data, driver };
   })();
   assetsPromise.catch(() => { assetsPromise = null; });
   return assetsPromise;
