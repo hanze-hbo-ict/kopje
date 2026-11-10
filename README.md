@@ -3,8 +3,9 @@
 Browser-only Java IDE for small multi-file assignments, on a hardened
 [JavaBox](https://github.com/bmarti44/javabox) runtime. See `PLAN.md` for scope and phases.
 
-**Status:** Phase 0 recon done, Phase 1 driver done and host-tested, and the Phase 2 runtime slice written.
-The WASM runtime has not yet been exercised end-to-end (see `docs/baseline.md`).
+**Status:** Gates 0–2 pass on the upstream prebuilt runtime in Chromium, Firefox and WebKit (headless).
+Multi-file compile, interactive stdin, Stop, `System.exit` and capability probes all work. Next: Phase 3
+(source build without Doom, network hardening), then the Phase 4 IDE. See `docs/baseline.md`.
 
 ## Layout
 
@@ -26,8 +27,8 @@ mkdir -p runtime-prebuilt && for f in javabox-direct.mjs javabox-direct.wasm jav
   curl -fsSL -o runtime-prebuilt/$f https://javabox-demo.brian-fec.workers.dev/$f; done   # ~79 MB, dev only
 npm test                      # unit + driver tests on a host JDK 17+
 npm run build:runtime         # -> dist/
-npm run serve                 # http://localhost:5173/slice.html  (COOP/COEP set)
-npm i -D @playwright/test && npx playwright install && npm run test:e2e
+npm run serve                 # http://localhost:5391/slice.html  (COOP/COEP set)
+npm i && npx playwright install && npm run test:e2e
 ```
 
 The prebuilt runtime contains Doom assets and must not be redistributed by us; see `docs/licensing.md`.

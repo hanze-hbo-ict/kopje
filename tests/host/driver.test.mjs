@@ -30,7 +30,7 @@ function startDriver(srcDir, { poll = true } = {}) {
   const child = spawn('java', [
     '-cp', classesDir,
     `-Djavaedit.src=${srcDir}`, `-Djavaedit.ctl=${ctlPath}`,
-    `-Djavaedit.poll=${poll}`, '-Djavaedit.warmup=false',
+    `-Djavaedit.poll=${poll}`, '-Djavaedit.warmup=false', '-Djavaedit.stdin=-',
     'CompileServer',
   ], { stdio: ['pipe', 'pipe', 'pipe'] });
   const state = { stdout: '', stderr: '', exitCode: undefined };

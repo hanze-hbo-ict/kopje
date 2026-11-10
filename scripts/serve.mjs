@@ -5,7 +5,7 @@ import { createReadStream, statSync } from 'node:fs';
 import { join, resolve, extname, normalize, sep } from 'node:path';
 
 const root = resolve(process.argv[2] || 'dist');
-const port = Number(process.argv[3] || 5173);
+const port = Number(process.argv[3] || 5391);
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.wasm': 'application/wasm',

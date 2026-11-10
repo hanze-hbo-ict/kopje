@@ -23,8 +23,10 @@ import java.util.*;
  *   6. emit {"t":"exit","code":N}; the host then destroys the whole JVM context
  *
  * Channels:
- *   stdin  (fd 0) — the GO line, then student input only. Byte 0x04 = EOF (the host
- *                   strips control bytes from user input, so 0x04 is unambiguous).
+ *   stdin  — an append-only MEMFS file (default /work/stdin) the host appends to; the
+ *            GO line, then student input only. Byte 0x04 = EOF (the host strips control
+ *            bytes from user input, so 0x04 is unambiguous). The prebuilt runtime's fd 0
+ *            ring buffer cannot be polled (available() is always 0), so it is not used.
  *   stdout (fd 1) / stderr (fd 2) — student output only.
  *   control       — a write-only device (default /dev/jectl) carrying JSON lines.
  *                   Student code could in principle reach it via reflection; the
@@ -33,9 +35,9 @@ import java.util.*;
  * System properties:
  *   javaedit.src      source root (default /work/src)
  *   javaedit.ctl      control channel path (default /dev/jectl)
- *   javaedit.poll     "true" (default): poll available() instead of blocking in the
- *                     native ring-buffer read (avoids an upstream futex lost-wakeup and
- *                     makes waiting-for-input observable). Host tests use "false".
+ *   javaedit.stdin    input file (default /work/stdin); "-" = the process's fd 0 (host tests)
+ *   javaedit.poll     "true" (default): wait for input by polling available(), which makes
+ *                     waiting-for-input observable.
  *   javaedit.warmup   "false" disables the javac warm-up compile.
  */
 public class CompileServer {
@@ -144,25 +146,23 @@ public class CompileServer {
     static final class ConsoleInput extends InputStream {
         private final FileInputStream raw;
         private final boolean poll;
+        private final boolean events;
         private boolean eof;
-        private boolean waiting;
-        ConsoleInput(FileInputStream raw, boolean poll) { this.raw = raw; this.poll = poll; }
+        ConsoleInput(FileInputStream raw, boolean poll, boolean events) { this.raw = raw; this.poll = poll; this.events = events; }
 
         private void awaitData() throws IOException {
             if (!poll) return;
             if (raw.available() > 0) return;
             System.out.flush();
             System.err.flush();
-            waiting = true;
-            emit("{\"t\":\"stdin-wait\"}");
+            if (events) emit("{\"t\":\"stdin-wait\"}");
             try {
                 while (raw.available() == 0) {
                     try { Thread.sleep(10); }
                     catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new InterruptedIOException(); }
                 }
             } finally {
-                waiting = false;
-                emit("{\"t\":\"stdin-resume\"}");
+                if (events) emit("{\"t\":\"stdin-resume\"}");
             }
         }
 
@@ -293,6 +293,42 @@ public class CompileServer {
         }
     }
 
+    // ── System.exit observation ─────────────────────────────────────────────────
+
+    /**
+     * In the WASM JVM, System.exit never reaches Emscripten's onExit, so the host would
+     * not learn that the program ended. JDK 21's Runtime.exit logs
+     * "Runtime.exit() called with status: N" to System.Logger "java.lang.Runtime" at
+     * DEBUG, synchronously and before shutdown; this handler turns that into an exit
+     * event. On JDKs without that logging (e.g. host JDK 17) it simply never fires.
+     */
+    static final class ExitHandler extends java.util.logging.Handler {
+        private static final java.util.regex.Pattern STATUS = java.util.regex.Pattern.compile("status: (-?\\d+)");
+        @Override public void publish(java.util.logging.LogRecord r) {
+            String msg = r.getMessage();
+            if (msg == null || !msg.startsWith("Runtime.exit")) return;
+            java.util.regex.Matcher m = STATUS.matcher(msg);
+            if (!m.find()) return;
+            System.out.flush();
+            System.err.flush();
+            emit("{\"t\":\"exit\",\"code\":" + Integer.parseInt(m.group(1)) + ",\"via\":\"System.exit\"}");
+        }
+        @Override public void flush() {}
+        @Override public void close() {}
+    }
+    private static java.util.logging.Logger runtimeLogger;   // strong ref: JUL holds loggers weakly
+
+    static void observeSystemExit() {
+        try {
+            runtimeLogger = java.util.logging.Logger.getLogger("java.lang.Runtime");
+            runtimeLogger.setUseParentHandlers(false);
+            runtimeLogger.setLevel(java.util.logging.Level.FINE);
+            runtimeLogger.addHandler(new ExitHandler());
+        } catch (Throwable t) {
+            emit("{\"t\":\"log\",\"message\":" + q("System.exit observer unavailable: " + t) + "}");
+        }
+    }
+
     // ── run ────────────────────────────────────────────────────────────────────
 
     /** Remove driver/reflection frames below the student's main so traces look like `java Main`. */
@@ -357,7 +393,8 @@ public class CompileServer {
         String srcRoot = System.getProperty("javaedit.src", "/work/src");
         boolean poll = !"false".equals(System.getProperty("javaedit.poll"));
 
-        FileInputStream rawIn = new FileInputStream(FileDescriptor.in);
+        String stdinPath = System.getProperty("javaedit.stdin", "/work/stdin");
+        FileInputStream rawIn = "-".equals(stdinPath) ? new FileInputStream(FileDescriptor.in) : new FileInputStream(stdinPath);
 
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
@@ -367,7 +404,7 @@ public class CompileServer {
         if (!"false".equals(System.getProperty("javaedit.warmup"))) warmup(compiler);
         emit("{\"t\":\"ready\"}");
 
-        String go = readControlLine(rawIn);
+        String go = readControlLine(new ConsoleInput(rawIn, poll, false));
         if (go == null || !go.startsWith("JAVAEDIT_GO ")) {
             emit("{\"t\":\"fatal\",\"message\":" + q("bad control line") + "}");
             System.exit(70);
@@ -407,7 +444,8 @@ public class CompileServer {
             System.exit(1);
         }
 
-        System.setIn(new ConsoleInput(rawIn, poll));
+        System.setIn(new ConsoleInput(rawIn, poll, true));
+        observeSystemExit();
         int code = run(outcome.classes, mainClass);
         emit("{\"t\":\"exit\",\"code\":" + code + "}");
         System.exit(code);

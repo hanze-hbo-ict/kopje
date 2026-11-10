@@ -4,12 +4,11 @@
 // bridges three channels to the parent window via postMessage:
 //   control  (Java -> host): JSON lines on the /dev/jectl device
 //   stdout / stderr (Java -> host): per-byte Emscripten devices, forwarded in order
-//   stdin    (host -> Java): the upstream SharedArrayBuffer ring buffer (fd 0)
+//   stdin    (host -> Java): append-only MEMFS file /work/stdin, polled by the driver
 //
 // Messages from the parent: {type:'start', files, mainClass} | {type:'stdin', text} | {type:'eof'}
 // Messages to the parent:   {type:'event', event:{...}}  (see runtime-protocol.js)
 
-const RING_SIZE = 3072;            // must match build/jvm-main.c RING_BUF_SIZE
 const EOF_BYTE = 0x04;             // driver maps 0x04 to end-of-stream
 const FLUSH_MS = 16;
 
@@ -31,8 +30,14 @@ let capped = false;
 let flushTimer = 0;
 const decoders = { stdout: new TextDecoder('utf-8'), stderr: new TextDecoder('utf-8') };
 
+const bootNoise = [];
 function pushByte(stream, byte) {
   if (byte === null || byte === undefined) return;
+  if (!started) {             // before the run starts, output is runtime noise, not the program's
+    bootNoise.push(byte & 0xff);
+    if (byte === 0x0a) { post({ kind: 'log', message: `[boot ${stream}] ` + new TextDecoder().decode(new Uint8Array(bootNoise)).trimEnd() }); bootNoise.length = 0; }
+    return;
+  }
   if (capped) return;
   if (++outputBytes > OUTPUT_CAP) {
     capped = true;
@@ -71,7 +76,7 @@ function ctlByte(byte) {
     case 'compiling': post({ kind: 'compiling' }); break;
     case 'compiled': post({ kind: 'compiled', ok: msg.ok, ms: msg.ms, diagnostics: msg.diagnostics }); break;
     case 'running': post({ kind: 'running' }); break;
-    case 'stdin-wait': post({ kind: 'waiting-for-input' }); pumpStdin(); break;
+    case 'stdin-wait': post({ kind: 'waiting-for-input' }); break;
     case 'stdin-resume': post({ kind: 'input-consumed' }); break;
     case 'exit': post({ kind: 'exit', code: msg.code, source: 'driver' }); break;
     case 'error': post({ kind: 'error', errorKind: msg.kind, message: msg.message }); break;
@@ -82,36 +87,17 @@ function ctlByte(byte) {
   }
 }
 
-// ── stdin: bounded writes into the 3 KB ring so the writer never spins ─────────
-let stdinQueue = [];               // pending bytes
-let pumpTimer = 0;
+// ── stdin: append-only MEMFS file polled by the driver ──────────────────────────
+// The prebuilt's fd 0 ring buffer reports available() == 0 forever, so the driver
+// cannot wait on it without risking the upstream futex lost-wakeup. MEMFS lives on
+// this (main) thread; the JVM's reads are proxied here, so appends are seen at once.
+let stdinStream = null;
 const encoder = new TextEncoder();
-
-function ringUsed() {
-  // jvm_debug_stdin_state() = write_pos * 10000 + read_pos  (both < RING_SIZE)
-  const s = Module.ccall('jvm_debug_stdin_state', 'number', [], []);
-  if (s < 0) return RING_SIZE;
-  const wp = Math.floor(s / 10000), rp = s % 10000;
-  return (wp - rp + RING_SIZE) % RING_SIZE;
-}
-
-function pumpStdin() {
-  clearTimeout(pumpTimer);
-  pumpTimer = 0;
-  if (!Module || !stdinQueue.length) return;
-  const free = RING_SIZE - 1 - ringUsed();
-  if (free > 0) {
-    const n = Math.min(free, stdinQueue.length);
-    const bytes = stdinQueue.slice(0, n);
-    stdinQueue = stdinQueue.slice(n);
-    Module.ccall('jvm_stdin_write', null, ['array', 'number'], [bytes, bytes.length]);
-  }
-  if (stdinQueue.length) pumpTimer = setTimeout(pumpStdin, 20);
-}
-
 function enqueueStdin(bytes) {
-  for (const b of bytes) stdinQueue.push(b);
-  pumpStdin();
+  const data = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes);
+  if (!data.length) return;
+  stdinStream ??= Module.FS.open('/work/stdin', 'a');
+  Module.FS.write(stdinStream, data, 0, data.length);
 }
 
 // ── messages from the parent ────────────────────────────────────────────────────
@@ -149,19 +135,38 @@ async function boot() {
 
   Module = await createModule({
     locateFile: (p) => RUNTIME_BASE + p,
-    // Appended after jvm-main.c's defaults, so these override them.
+    // NOTE: the prebuilt binary ignores Module.arguments (verified: even -version has
+    // no effect). Kept for a future source build whose jvm-main.c forwards argv; the
+    // driver's property defaults already match these values.
     arguments: [
       '-Djava.class.path=/opt/javaedit',
       '-Djavaedit.src=/work/src',
       '-Djavaedit.ctl=/dev/jectl',
+      ...params.getAll('jvmArg'),   // diagnostics only, e.g. ?jvmArg=-Xlog:startuptime
     ],
     preRun: [(M) => {
       const FS = M.FS;
-      for (const d of ['/tmp', '/tmp/hsperfdata_root', '/root', '/work', '/work/src', '/opt', '/opt/javaedit']) {
+      for (const d of ['/tmp', '/tmp/hsperfdata_root', '/root', '/work', '/work/src']) {
         try { FS.mkdir(d); } catch { /* exists */ }
       }
-      for (const [name, bytes] of driverFiles) FS.writeFile('/opt/javaedit/' + name, bytes);
       FS.createDevice('/dev', 'jectl', null, ctlByte);
+      // Create the file only. Opening a stream here would take fd 0: preRun runs
+      // before FS.init() creates the standard streams, shifting stdout/stderr.
+      FS.writeFile('/work/stdin', new Uint8Array(0));
+      // The prebuilt ignores Module.arguments, so the class path cannot be changed.
+      // Instead hold main() back with a run dependency until the preload package has
+      // populated /opt/javabox, then overwrite upstream's CompileServer*.class with
+      // ours and drop Doom from the class path (ADR-1, revised).
+      M.addRunDependency('javaedit-driver');
+      const install = () => {
+        if (!FS.analyzePath('/opt/javabox/CompileServer.class').exists) { setTimeout(install, 2); return; }
+        for (const name of FS.readdir('/opt/javabox')) {
+          if (name.startsWith('CompileServer') || /^(doom\.jar|freedoom1\.wad|doom\.cfg)$/.test(name)) FS.unlink('/opt/javabox/' + name);
+        }
+        for (const [name, bytes] of driverFiles) FS.writeFile('/opt/javabox/' + name, bytes);
+        M.removeRunDependency('javaedit-driver');
+      };
+      install();
     }],
     stdout: (b) => pushByte('stdout', b),
     stderr: (b) => pushByte('stderr', b),
@@ -170,6 +175,8 @@ async function boot() {
     onExit: (code) => { flushOutput(); post({ kind: 'exit', code, source: 'runtime' }); },
     onAbort: (what) => { flushOutput(); post({ kind: 'error', errorKind: 'abort', message: String(what) }); },
   });
+  // Not used for input, but keeps direct FileDescriptor.in reads blocking harmlessly
+  // in the JVM thread instead of hitting Emscripten's default TTY (window.prompt).
   Module.ccall('jvm_enable_ring_buffer_stdin', null, [], []);
   post({ kind: 'log', message: `module instantiated in ${Math.round(performance.now() - t0)} ms` });
 }

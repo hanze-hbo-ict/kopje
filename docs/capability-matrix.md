@@ -1,25 +1,27 @@
-# Capability matrix (initial — Phase 0 static analysis)
+# Capability matrix (prebuilt runtime, verified 2026-11-10)
 
-Status values: **allowed / denied / unsupported / unverified**. Nothing below has been
-verified against the running WASM runtime yet (see baseline.md, D1). This runtime is a
-best-effort, capability-restricted environment, **not** a verified sandbox.
+Status values: **allowed / denied / unsupported / unverified**. Probes:
+`tests/e2e/capabilities.spec.mjs` (Chromium); lifecycle: `tests/e2e/slice.spec.mjs`
+(Chromium, Firefox, WebKit). This is a best-effort, capability-restricted environment,
+**not** a verified sandbox.
 
-| Capability | Status | Enforcement layer | Evidence / test |
+| Capability | Status | Enforcement layer | Evidence |
 |---|---|---|---|
-| stdout / stderr | allowed | driver + per-byte devices, 1 MB cap | host: `driver.test.mjs`; e2e: `slice.spec.mjs` (pending) |
-| stdin | allowed | ring buffer, bounded host writes | host tests pass; e2e pending |
-| Outbound TCP (`java.net.Socket`) | **unverified — likely egress** | none yet. SOCKFS maps `connect()` to `new WebSocket(ws://host:port)`; libnet `NET_*` are aborting stubs | static: `.mjs` contains `___syscall_connect` → SOCKFS → `WebSocketConstructor`. Phase 3: CSP `connect-src 'self'` + override socket syscalls to return `-EACCES` |
-| `HttpURLConnection` / `java.net.http` | unverified | same as above | Phase 3 test |
-| DNS (`InetAddress.getByName`) | unverified | Emscripten fake DNS (no network) | Phase 3 test |
-| File read/write in MEMFS | allowed (ephemeral) | MEMFS per iframe, destroyed per run | `/opt/jdk` is writable by student code — harmless (per-run) but noted |
-| Access to user's real filesystem | unsupported | no NODEFS/WORKERFS mounts in browser build | static: no mount in glue |
-| IDE `sessionStorage` from student code | unsupported (same-origin iframe, but no JS bridge from Java) | no Java→JS eval import | static import audit; Phase 5: distinct origin |
-| IndexedDB / localStorage / OPFS from runtime | unsupported | not linked (no IDBFS/OPFS) | static grep of glue |
-| `ProcessBuilder` / `Runtime.exec` | unverified (expected to fail: no fork/exec syscalls imported) | absence of syscalls | Phase 3 test |
-| `System.load` / `loadLibrary` arbitrary | unverified (no dynamic loader; static symbol table only) | static linking | Phase 3 test |
-| `System.exit` | allowed — ends the run only | disposable iframe | host test; e2e pending |
-| CPU time | bounded by wall-clock timeout (120 s, excl. stdin wait) | engine timer + iframe teardown | not a CPU quota |
-| Memory | bounded: 512 MB WASM max, `-Xmx128m` | Emscripten `MAXIMUM_MEMORY`, JVM | pending |
-| Threads in student code | unverified / out of scope | Emscripten pool of 16 | — |
-| Graphics/audio/input natives (Doom) | allowed in prebuilt (`jvm_doom_*`, `nativeRenderFrame`) | none — present in binary | remove in Phase 3 source build |
-| Spoofing driver control events | **allowed (residual)** | — | student can reach `/dev/jectl`; affects own console only |
+| stdout / stderr | allowed | per-byte devices, boot noise filtered, 1 MB cap → run torn down | slice spec: output-limit test |
+| stdin | allowed | MEMFS append file, driver polling | slice spec: sequential reads |
+| Outbound TCP (`java.net.Socket`) | **denied** (unsupported) | libnet not linked → `UnsatisfiedLinkError: InetAddress.init()`; no WebSocket opened | probe `socket`. SOCKFS→WebSocket path **still present in glue**; Phase 3 adds CSP `connect-src 'self'` and socket syscall overrides |
+| `HttpURLConnection` | **denied** | `ExceptionInInitializerError` in `NioSocketImpl.<clinit>` | probe `http` |
+| DNS | **denied** | same as TCP | probe `dns` |
+| Read host/real filesystem (`/etc/passwd`) | **unsupported** | only MEMFS exists (`/tmp /home /dev /proc /root /work /opt`) | probe `fileOutside` |
+| Read runtime files (`/opt/jdk/**` via `..`) | allowed | per-run MEMFS, destroyed with the iframe | probe `fileTraversal`; harmless, no user data in MEMFS |
+| Write files (NIO `Files.writeString` to `/tmp`) | **fails (compat gap)** | upstream MEMFS/NIO issue | probe `fileWrite`; file exercises will need a fix or `java.io` (unverified) |
+| `ProcessBuilder` / `Runtime.exec` | **denied** | `posix_spawn` → ENOSYS | probes `process`, `exec` |
+| `System.loadLibrary` / `System.load` | **denied** | no dynamic loader; static symbol table only | probes `loadLibrary`, `load` |
+| IDE `sessionStorage` from student code | unsupported (no Java→JS bridge) | same-origin iframe; no eval-like import | static import audit. Phase 5: separate origin |
+| IndexedDB / localStorage / OPFS from runtime | unsupported | not linked | static grep of glue |
+| `System.exit` | allowed: ends the run only | ADR-6 + iframe teardown | slice spec: exit code 3 then clean run |
+| CPU time | bounded by wall clock (120 s, excluding stdin wait) | engine timer + teardown | not a CPU quota |
+| Memory | bounded: 512 MB WASM max, `-Xmx128m` | link flag, JVM | high-water mark not measured |
+| Threads in student code | unverified / out of scope | pool of 16 pthreads | — |
+| Doom graphics/audio/input natives | present in binary, unreachable (Doom classes removed from MEMFS) | removal pending source build | — |
+| Spoofing driver control events | **allowed (residual)** | — | affects own console only |

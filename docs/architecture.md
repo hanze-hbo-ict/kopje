@@ -17,16 +17,22 @@ IDE page (static)                         runtime iframe (one per run, disposabl
 Code: `runtime/java/CompileServer.java` (driver), `runtime/host/` (iframe),
 `runtime/engine/` (parent API), `runtime/slice.html` (Gate 2 test page).
 
-## ADR-1 — Replace the driver at runtime, not by relinking
+## ADR-1 — Replace the driver at runtime, not by relinking (revised after testing)
 
-`jvm-main.c` appends `Module.arguments` after its own JVM options and hard-codes
-`FindClass("CompileServer")`. We write our driver classes into MEMFS in `preRun`
-(`/opt/javaedit`, a directory the preload package does not touch, so ordering vs. the
-package's own `preRun` does not matter) and pass `-Djava.class.path=/opt/javaedit`.
-HotSpot takes the last `-Djava.class.path`. **Consequence:** our driver is named
-`CompileServer` (default package). The upstream daemon and `doom.jar` are no longer on
-the class path. No native rebuild is needed for Phases 1–2.
-*Verification pending* (needs runtime execution).
+`jvm-main.c` hard-codes `FindClass("CompileServer")` with class path
+`/opt/javabox:/opt/javabox/doom.jar`. The original plan was to pass
+`-Djava.class.path=/opt/javaedit` via `Module.arguments`. **Testing showed the prebuilt
+ignores `Module.arguments`**, so the runtime host instead:
+
+1. calls `addRunDependency('javaedit-driver')` in `preRun`, which holds back `main()`;
+2. waits until the preload package has created `/opt/javabox/CompileServer.class`;
+3. unlinks upstream's `CompileServer*.class` and the Doom files, then writes our driver
+   classes there;
+4. removes the run dependency, and the JVM starts with our driver.
+
+**Consequences:** the driver is named `CompileServer` (default package). It can't receive
+`-D` options in the prebuilt, so its property defaults are the browser configuration. No
+native rebuild is needed for Phases 1–2. **Verified** in all three engines.
 
 ## ADR-2 — One disposable JVM per compile+run, hosted in an iframe
 
@@ -43,26 +49,36 @@ Costs to measure: ~256 MB shared memory per context; while a run is active and t
 not yet pre-booted only one exists — the spare is created *after* the active one is
 destroyed.
 
-## ADR-3 — Channels: control vs. student input are physically separate
+## ADR-3 — Channels: control and student input are physically separate (revised)
 
 - **Host → Java control:** exactly one line, `JAVAEDIT_GO <main.Class>\n`, sent before any
   user input is forwarded. Sources travel through MEMFS (`/work/src/**`), not stdin. After
-  the GO line every stdin byte belongs to the program, so "user input parsed as a command"
-  is impossible by construction (host test: `student input cannot be parsed as a control
-  command`).
-- **Java → host control:** JSON lines on a dedicated write-only device `/dev/jectl`
+  the GO line every input byte belongs to the program, so user input can't be parsed as a
+  command (host test: `student input cannot be parsed as a control command`).
+- **Input transport = append-only MEMFS file `/work/stdin`**, not the upstream fd 0 ring.
+  Measured: the prebuilt's fd 0 reports `available() == 0` forever. Waiting on it would
+  mean blocking in the native ring read, exposed to the upstream futex lost-wakeup race,
+  with no observable waiting state. MEMFS lives on the iframe's main thread and the JVM's
+  file syscalls are proxied there, so appends are visible immediately. This also removes
+  the 3 KB ring limit and the spinning writer. The driver's `System.in` polls
+  `available()` on that file (10 ms sleeps), emits `stdin-wait`/`stdin-resume`, and
+  flushes `System.out`/`System.err` before waiting so prompts are visible.
+  The ring is still *enabled*, so a program that reads `FileDescriptor.in` directly
+  blocks harmlessly in its pthread (Stop still works) instead of reaching Emscripten's
+  default TTY, which would call `window.prompt()` on the iframe's main thread.
+- **Java → host control:** JSON lines on the dedicated write-only device `/dev/jectl`
   (`ready, compiling, compiled{diagnostics}, running, stdin-wait, stdin-resume, exit,
-  error, compiler-crash`). stdout/stderr carry only program output.
-- **EOF:** the ring buffer has no EOF. Byte `0x04` is reserved; the engine strips control
-  characters from user input (`sanitizeInput`), so `0x04` can only come from the EOF
-  button.
-- **stdin polling:** student `System.in` is a driver `InputStream` that polls
-  `available()` (10 ms sleeps) and only then reads. This sidesteps the upstream futex
-  lost-wakeup race and gives a reliable `waiting-for-input` event, and flushes
-  `System.out`/`System.err` before blocking so prompts are visible.
-- **Residual:** student code can reach `/dev/jectl` or the driver via reflection and spoof
-  its *own* status events. Impact is limited to the student's own console. Documented,
-  not mitigated.
+  error, compiler-crash`). stdout/stderr carry only program output. Output printed before
+  the run starts (JVM boot noise such as the `Finalizer` NPE) goes to the log, not the
+  console.
+- **EOF:** byte `0x04` is reserved; the engine strips control characters from user input
+  (`sanitizeInput`), so `0x04` can only come from the EOF control.
+- **Pitfall found:** opening a stream in `preRun` took fd 0, because `FS.init()` creates
+  the standard streams after `preRun`. That shifted stdout to the stdin device. The append
+  stream is now opened lazily.
+- **Residual:** student code can reach `/dev/jectl`, `/work/stdin` or the driver via
+  reflection or file APIs and spoof its *own* status events. The impact is limited to the
+  student's own console. Documented, not mitigated.
 
 ## ADR-4 — Compilation
 
@@ -81,11 +97,24 @@ interleaving is preserved at byte granularity *as observed by the main thread* (
 are synchronous proxied syscalls, so order matches the program's write order). Cap: 1 MB
 per run (configurable) → `output-limit` event, run is torn down.
 
+## ADR-6 — Observing `System.exit` (new)
+
+Measured: in the WASM JVM, `System.exit(n)` never reaches Emscripten `onExit`, so without
+help the run hangs until the timeout. JDK 21's `Runtime.exit` logs
+`"Runtime.exit() called with status: N"` to `System.Logger("java.lang.Runtime")` at DEBUG,
+synchronously and before shutdown. The driver attaches a `java.util.logging` handler to
+that logger (level FINE, no parent handlers) and emits `{"t":"exit","code":N}`. The engine
+then destroys the iframe, whatever the JVM does next. Side effect: student code that
+configures the `java.lang.Runtime` JUL logger could interfere, which only affects its own
+run. On JDK 17 (host tests) the handler never fires and the process simply exits.
+
 ## Deviation log
 
 | # | Plan | Deviation | Reason |
 |---|---|---|---|
-| D1 | Gate 0: run upstream demo + tests | Not run | Executing upstream/prebuilt runtime code was blocked by the session's permission policy. Static analysis done instead; e2e spec prepared. |
+| D1 | Gate 0: run upstream demo + tests | The prebuilt runtime ran via our own slice/e2e. Upstream's Playwright suite was not run | At first blocked by the session permission policy; unblocked once the user ran the e2e command. Upstream's suite targets Doom and its own UI, which we don't ship. |
 | D2 | Engine in TypeScript | Plain ES modules (`runtime/engine/*.js`) for the slice | Runs without a bundler while the runtime is unverified; port to TS with the Vite app in Phase 4. |
 | D3 | Separate control/input channels | One-shot GO line on stdin + MEMFS sources + `/dev/jectl` | Achieves the separation without a native rebuild. |
+| D5 | Use JavaBox's SAB/Atomics stdin bridge | MEMFS append-file input channel | Prebuilt `available()` on fd 0 is broken and the ring has a lost-wakeup race; the file channel is observable and race-free. A source build could restore the ring once those are fixed. |
+| D6 | `System.exit` handled by the runtime | Observed through JDK 21 Runtime.exit logging | `onExit` never fires for `System.exit` in the prebuilt. |
 | D4 | Fork of JavaBox | Pinned upstream submodule, driver replaced at runtime | No fork needed yet; native changes (futex fix, socket denial, Doom removal) would require one in Phase 3. |

@@ -1,11 +1,9 @@
 # Phase 0 — JavaBox baseline
 
-**Status:** Gate 0 **partially met.** Static reconnaissance, licence audit and host-side
-tests are done. **Running the JavaBox runtime has not been verified**: in the agent
-session, executing the downloaded/upstream runtime code (prebuilt `.mjs`/`.wasm`, the
-upstream `fetch-prebuilt.sh`, and therefore any upstream source build) was blocked by the
-session's permission policy. Every number below marked *pending* needs that permission
-(or a human run of `npm run test:e2e`).
+**Status:** Gate 0 **met for the prebuilt runtime** (2026-11-10). Static reconnaissance,
+licence audit, host-side tests, and end-to-end runs in Chromium, Firefox and WebKit are done.
+Open: upstream's own Playwright suite was not run (it targets Doom/upstream UI, which we do
+not use), and no **source build** has been made yet (Phase 3).
 
 ## Upstream pin
 
@@ -45,7 +43,7 @@ real size lever. The JDK image was jlinked on **macOS** (it contains `shaders.me
 ## Test environment
 
 Apple M1 Pro, 16 GB RAM, macOS 27.0; Node 25.8.1; host JDK 17.0.1 (Oracle); emcc 5.0.2-git;
-Docker available. Browsers: *pending* (Playwright Chromium/Firefox/WebKit).
+Docker available. Browsers: Playwright Chromium headless shell 158, Firefox 159, WebKit 27.2 (headless).
 
 ## Runtime interfaces (from source + prebuilt glue)
 
@@ -97,46 +95,70 @@ recvfrom, sendmsg, recvmsg, getsockopt…`), mmap/munmap, pthread plumbing, `_ex
 NODEFS in browser, OPFS, localStorage). No generic JS-eval bridge found.
 
 **Networking.** Emscripten **SOCKFS is linked**; its `connect()` creates
-`new WebSocket(ws://host:port)`. Whether Java reaches it (`sun.nio.ch.Net.connect0`) or
-first hits an aborting `NET_*` stub is *pending* a runtime test. Either way it is a
-host-level egress path that must be closed (Phase 3: CSP `connect-src` + override
-socket syscalls in the glue).
+`new WebSocket(ws://host:port)`. **Verified:** Java never reaches it, because
+`InetAddress.<clinit>` fails with `UnsatisfiedLinkError` (libnet is not linked), and Socket,
+HTTP and DNS all fail without a WebSocket being opened. The SOCKFS path still exists in the
+glue, so Phase 3 adds CSP `connect-src` and syscall overrides as a second layer.
 
 **Filesystem.** Emscripten MEMFS only, populated from the preload package (`/opt/jdk`,
 `/opt/javabox`). Ephemeral, per module instance. Writable by student code.
 
 **Termination.** No API to stop a run. `proc_exit` calls
 `PThread.terminateAllThreads()` and `onExit`. Workers belong to the creating document,
-so removing that document (iframe) is the teardown strategy (ADR-2).
+so removing that document (iframe) is the teardown strategy (ADR-2). **Verified** for
+`while(true)` and a blocked `Scanner.nextLine()` in all three engines.
 
 **Persistent storage.** None found in the runtime. Upstream page uses none.
 
-**Browser support (upstream claim).** Chrome 92+, Firefox 79+, Safari 15.2+ (SAB).
-*Pending* own verification.
+**Browser support.** Upstream claims Chrome 92+, Firefox 79+, Safari 15.2+ (SAB).
+Verified headless: Chromium 158, Firefox 159, WebKit 27.2. Real Safari and mobile are not
+tested yet.
 
-## Metrics
+## Prebuilt vs. pinned source — verified differences
 
-| Metric | Value |
-|---|---|
-| Total download (prebuilt, uncompressed / brotli) | 79.0 MB / 48.0 MB |
-| Cold boot to JVM ready | *pending* (upstream claims 3–5 s) |
-| Boot incl. javac warm-up (driver `ready`) | *pending* |
-| Warm compile+run (Hello World, 2 files) | *pending* (upstream claims < 1 s) |
-| WASM memory after run | *pending* (initial 256 MB) |
-| Stop latency (iframe removal) | *pending* |
+The deployed prebuilt is **older than the pinned source** in two ways that matter:
 
-Host-JVM reference (not WASM): driver compile+run of the 2-file fixture ≈ 250 ms
-wall-clock per fresh `java` process including JVM start (Node test runner timings).
+1. `Module.arguments` are **ignored** (`-version`, `-Djava.class.path=/nonexistent` had no
+   effect), so the argv loop in today's `jvm-main.c` is not in the prebuilt.
+2. `FileInputStream.available()` on fd 0 **always returns 0** while `read()` works
+   (`tests/e2e/stdin-diag.spec.mjs`), so the `handleAvailable` emscripten branch is missing.
+
+Also observed: the JVM's `Finalizer` and `Common-Cleaner` threads die with
+`NullPointerException` at every boot (upstream filters these by text); `System.exit` does
+**not** reach Emscripten `onExit`.
+
+## Metrics (headless, Apple M1 Pro, prebuilt runtime, `tests/e2e/slice.spec.mjs`)
+
+| Metric | Chromium (headless shell 158) | Firefox 159 | WebKit 27.2 |
+|---|---:|---:|---:|
+| Cold boot → driver `ready` (module + JVM + javac warm-up) | 1.8 s | 2.5 s | 2.1 s |
+| Run → first prompt (2 files, prewarmed JVM; mostly javac) | 1.9 s | 1.9 s | 1.9 s |
+| Compile+run, 2 files, prewarmed | 2.0 s | 2.6 s | 2.4 s |
+| javac alone, 1 small file (driver `compiled.ms`) | 1.3 s | — | — |
+| Stop latency (`engine.stop()` → `stopped`) | 10 ms | 14 ms | 15 ms |
+| Module instantiate (cached `.wasm`) | 0.15 s | — | — |
+
+The JVM boots in about 0.2 s, and **javac in the Zero interpreter is the dominant
+cost**: around 1.3 s even for a trivial file. Upstream's "sub-second compile+run" is not
+reproduced for multi-file programs. Memory: 256 MB initial WASM memory per context
+(link flag); JS heap / WASM high-water mark are **not measured yet**.
+
+Totals: download 79.0 MB uncompressed / 48.0 MB brotli (prebuilt, incl. 30 MB Doom).
 
 ## Tests
 
 | Suite | Command | Result (2026-11-10) |
 |---|---|---|
-| Upstream Playwright | `npx playwright test` in `vendor/javabox` | **not run** — executes upstream runtime (blocked) |
+| Upstream Playwright | `npx playwright test` in `vendor/javabox` | not run — tests Doom/upstream UI we do not ship |
 | javaedit unit (paths) | `npm run test:unit` | 6/6 pass |
 | javaedit driver on host JDK 17 | `npm run test:host` | 14/14 pass |
-| javaedit e2e (Gate 2 slice) | `npm run build:runtime && npm run test:e2e` | **written, not run** (blocked) |
+| Gate 2 slice | `npm run build:runtime && npx playwright test slice` | 2/2 pass in Chromium, Firefox, WebKit |
+| Capability probes | `npx playwright test capabilities --project=chromium` | 10/10 pass (see capability-matrix.md) |
 
-Upstream source build: not attempted (would run upstream build scripts; also blocked).
-Prerequisites present: emcc 5.0.2 (upstream tested with 5.0.2), Docker. Missing: JDK 21
-(`brew install openjdk@21`), GNU grep/autotools not checked.
+Upstream source build: not attempted yet. Prerequisites present: emcc 5.0.2 (upstream
+tested with 5.0.2), Docker. Missing: JDK 21 (`brew install openjdk@21`); GNU grep and
+autotools not checked.
+
+**Harness note:** port 5173 on this machine was already taken by an unrelated Vite app,
+and `reuseExistingServer` silently tested *that* app. The dev server now uses port 5391
+with `reuseExistingServer: false`.
