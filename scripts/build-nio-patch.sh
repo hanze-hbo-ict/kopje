@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Build a java.base patch that makes java.nio.file work on Emscripten (PLAN.md F1).
 #
-#   scripts/build-nio-patch.sh <openjdk-src> <jdk-home> <out-dir>
+#   scripts/build-nio-patch.sh <openjdk-src> <jdk-home> <out-dir> [<classlib-jdk-home>]
+#
+# <jdk-home> runs javac; the patch is compiled against <classlib-jdk-home>'s java.base
+# (javac --system; default <jdk-home>), so a Linux host can build the macOS patch.
 #
 # Why: JavaBox runs the *macOS* class library on natives built for Emscripten. The class
 # sun.nio.fs.UnixConstants is generated per target from C headers, and its values are
@@ -14,7 +17,7 @@
 # sun.nio.fs package (share + unix + macosx sources of the same OpenJDK revision) against
 # it. The result is loaded with --patch-module=java.base=<out-dir>/java.base.
 set -euo pipefail
-SRC="${1:?openjdk source dir}"; JDK="${2:?jdk home}"; OUT="${3:?output dir}"
+SRC="${1:?openjdk source dir}"; JDK="${2:?jdk home}"; OUT="${3:?output dir}"; SYSTEM="${4:-$JDK}"
 TEMPLATE="$SRC/src/java.base/unix/classes/sun/nio/fs/UnixConstants.java.template"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -81,7 +84,7 @@ done
 SOURCES+=("$GEN")
 
 rm -rf "$OUT" && mkdir -p "$OUT/java.base"
-if ! "$JDK/bin/javac" -nowarn -XDignore.symbol.file \
+if ! "$JDK/bin/javac" -nowarn -XDignore.symbol.file --system "$SYSTEM" \
       --patch-module java.base="$WORK/gensrc" \
       -d "$OUT/java.base" "${SOURCES[@]}" > "$WORK/javac.log" 2>&1; then
   cat "$WORK/javac.log" >&2

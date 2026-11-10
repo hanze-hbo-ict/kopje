@@ -8,7 +8,10 @@
 #      spaces — libtool and OpenJDK configure fail on paths with spaces
 #   2. fetch + verify Temurin JDK 21.0.10 (matches the HotSpot sources in the openjdk
 #      submodule, DEFAULT_VERSION_UPDATE=10; a different update gives a VM/class-library
-#      mismatch, visible as @IntrinsicCandidate warnings at boot)
+#      mismatch, visible as @IntrinsicCandidate warnings at boot). The class library is
+#      ALWAYS macOS/aarch64 (ADR-8). On macOS/arm64 that JDK also runs the build; on
+#      Linux (x64, aarch64) a Linux JDK of the same version runs it and jlinks the macOS
+#      jmods (cross-linking), so the runtime is the same on both build hosts.
 #   3. upstream build-jvm-wasm.sh + build-jdk-native.sh (unchanged, incremental)
 #   4. OUR jlink step (replaces upstream build-jdk-modules.sh): chosen module set,
 #      no ct.sym, no Doom, no java.desktop; plus a java.base patch for sun.nio.fs built
@@ -37,9 +40,18 @@ SRC="$BUILD_DIR/javabox"
 OUT="$BUILD_DIR/out-$MODULE_SET"
 
 JDK_VERSION="21.0.10+7"
-JDK_SHA256_MAC_AARCH64="01ca390455216ca27bdddf8cfad51aaedb4f90e1e23aad9bfd9e90caaa2c5f1b"
-JDK_URL_MAC_AARCH64="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.10%2B7/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.10_7.tar.gz"
-JDK_DIR="$BUILD_DIR/jdk-21.0.10"
+JDK_URL_BASE="https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.10%2B7"
+# <archive> <sha256>, from Adoptium's published .sha256.txt files.
+JDK_MAC_AARCH64="OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.10_7.tar.gz 01ca390455216ca27bdddf8cfad51aaedb4f90e1e23aad9bfd9e90caaa2c5f1b"
+JDK_LINUX_X64="OpenJDK21U-jdk_x64_linux_hotspot_21.0.10_7.tar.gz ea3b9bd464d6dd253e9a7accf59f7ccd2a36e4aa69640b7251e3370caef896a4"
+JDK_LINUX_AARCH64="OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.10_7.tar.gz 357fee29fb0d5c079f6730db98b28942df13a6eed426f6c61cd4ad703ab27b9a"
+CLASSLIB_JDK_DIR="$BUILD_DIR/jdk-21.0.10"            # macOS/aarch64: the class library
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64)                 HOST_JDK=""; HOST_JDK_DIR="$CLASSLIB_JDK_DIR" ;;
+  Linux-x86_64)                 HOST_JDK="$JDK_LINUX_X64"; HOST_JDK_DIR="$BUILD_DIR/jdk-21.0.10-linux" ;;
+  Linux-aarch64|Linux-arm64)    HOST_JDK="$JDK_LINUX_AARCH64"; HOST_JDK_DIR="$BUILD_DIR/jdk-21.0.10-linux" ;;
+  *) echo "Unsupported build host $(uname -s)-$(uname -m); use macOS/arm64 or Linux x64/aarch64." >&2; exit 1 ;;
+esac
 
 case "$MODULE_SET" in
   # Upstream's list (container/Dockerfile + build-jdk-modules.sh), for baseline comparison.
@@ -60,15 +72,20 @@ fi
 have="$(git -C "$SRC" rev-parse HEAD)"
 [ "$have" = "$want" ] || { echo "ERROR: $SRC is at $have, expected pinned $want" >&2; exit 1; }
 
-# 2. Version-matched JDK (used as boot JDK, javac and jlink).
-if [ ! -x "$JDK_DIR/Contents/Home/bin/jlink" ]; then
-  [ "$(uname -s)-$(uname -m)" = "Darwin-arm64" ] || { echo "Only macOS/arm64 is scripted; set up JDK $JDK_VERSION at $JDK_DIR manually." >&2; exit 1; }
-  tmp="$BUILD_DIR/jdk.tar.gz"
-  curl -fsSL -o "$tmp" "$JDK_URL_MAC_AARCH64"
-  echo "$JDK_SHA256_MAC_AARCH64  $tmp" | shasum -a 256 -c -
-  mkdir -p "$JDK_DIR" && tar -xzf "$tmp" -C "$JDK_DIR" --strip-components=1 && rm "$tmp"
-fi
-J="$JDK_DIR/Contents/Home"
+# 2. Version-matched JDKs: the host JDK is boot JDK, javac and jlink; the macOS/aarch64 JDK
+#    provides the class library (its jmods, and its java.base for compiling the NIO patch).
+jdk_home() { if [ -d "$1/Contents/Home" ]; then echo "$1/Contents/Home"; else echo "$1"; fi; }
+fetch_jdk() {   # <dir> "<archive> <sha256>"
+  local dir="$1" archive="${2% *}" sha="${2#* }" tmp="$BUILD_DIR/jdk.tar.gz"
+  [ -f "$(jdk_home "$dir")/jmods/java.base.jmod" ] && return
+  curl -fsSL -o "$tmp" "$JDK_URL_BASE/$archive"
+  if command -v sha256sum >/dev/null; then echo "$sha  $tmp" | sha256sum -c -; else echo "$sha  $tmp" | shasum -a 256 -c -; fi
+  rm -rf "$dir" && mkdir -p "$dir" && tar -xzf "$tmp" -C "$dir" --strip-components=1 && rm "$tmp"
+}
+fetch_jdk "$CLASSLIB_JDK_DIR" "$JDK_MAC_AARCH64"
+[ -n "$HOST_JDK" ] && fetch_jdk "$HOST_JDK_DIR" "$HOST_JDK"
+J="$(jdk_home "$HOST_JDK_DIR")"
+CLASSLIB="$(jdk_home "$CLASSLIB_JDK_DIR")"
 export JAVA_HOME="$J" JAVABOX_BOOT_JDK="$J" JAVABOX_JDK21_HOME="$J" PATH="$J/bin:$PATH"
 
 cd "$SRC"
@@ -80,7 +97,7 @@ fi
 
 # 4. Class library.
 rm -rf build/jdk-wasm
-jlink --add-modules "$MODULES" --output build/jdk-wasm \
+jlink --module-path "$CLASSLIB/jmods" --add-modules "$MODULES" --output build/jdk-wasm \
   --strip-debug --no-man-pages --no-header-files --compress="${KOPJE_JLINK_COMPRESS:-zip-0}"
 # E5: uncompressed jimage (zip-0) gzips to 10.3 MB on the wire vs 14.5 MB for zip-6; boot time
 # is unchanged; MEMFS then holds ~35 MB instead of ~16 MB per runtime (docs/baseline.md).
@@ -89,7 +106,7 @@ find build/jdk-wasm/lib \( -name '*.so' -o -name '*.dylib' \) -type f -size +0c 
 find build/jdk-wasm/bin -type f -delete
 rm -f build/jdk-wasm/lib/jspawnhelper build/jdk-wasm/lib/shaders.metallib
 # java.base patch: sun.nio.fs recompiled against Emscripten's UnixConstants (PLAN.md F1).
-"$ROOT/scripts/build-nio-patch.sh" "$SRC/openjdk" "$J" build/jdk-wasm/patch
+"$ROOT/scripts/build-nio-patch.sh" "$SRC/openjdk" "$J" build/jdk-wasm/patch "$CLASSLIB"
 rm -f build/jdk-wasm/patch/UnixConstants.java.generated
 # Empty placeholders: System.loadLibrary must "find" the statically linked natives.
 for lib in libjava libzip libnet libnio libjimage; do touch "build/jdk-wasm/lib/$lib.so"; done
@@ -159,6 +176,7 @@ if grep -q 'WebSocket' "$OUT/javabox-direct.mjs"; then
 fi
 cp build/jdk-wasm/KOPJE_JLINK_JDK "$OUT/BUILD_INFO"
 echo "link: own jvm-main.c + no-sockets.js; INITIAL_MEMORY=${INITIAL_MEMORY_MB}MB PTHREAD_POOL_SIZE=${PTHREAD_POOL}" >> "$OUT/BUILD_INFO"
+[ -n "$HOST_JDK" ] && echo "build host: $(uname -s)-$(uname -m), cross-linked macos-aarch64 jmods" >> "$OUT/BUILD_INFO"
 {
   echo "javabox $(git rev-parse HEAD)"
   echo "openjdk $(git -C openjdk rev-parse HEAD)"

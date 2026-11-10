@@ -32,8 +32,8 @@ headers, so Java cannot start there.
 
 ## Build and deploy with GitHub Actions
 
-`.github/workflows/deploy.yml` does everything below on a macOS/arm64 runner (the runtime uses
-the macOS class library, ADR-8), with Emscripten pinned through emsdk, and deploys `dist/` with
+`.github/workflows/deploy.yml` does everything below on an Ubuntu runner, cross-linking the
+macOS class library (ADR-8, docs/runtime-build.md), with Emscripten pinned through emsdk, and deploys `dist/` with
 Wrangler on every push to `main`. The built runtime is cached on its inputs (JavaBox commit,
 build scripts, `runtime/native/`, emsdk version), so only a runtime change rebuilds it.
 
@@ -43,13 +43,11 @@ Setup, once:
 2. Add repository secrets `CLOUDFLARE_API_TOKEN` (permission *Cloudflare Pages: Edit*) and
    `CLOUDFLARE_ACCOUNT_ID`. Without them the workflow builds and uploads `dist` as an artifact
    only.
-3. CI's Emscripten (emsdk) is a different build from Homebrew's, so its runtime may not match
-   a `runtime.lock.json` made locally. Run the workflow manually with **update lock**; it
+3. CI's Emscripten (emsdk) is a different build from Homebrew's, so its `.wasm` (and the
+   `.mjs`) may not match a `runtime.lock.json` made locally; the `.data` (class library)
+   should. Run the workflow manually with **update lock**; it
    uploads the new `runtime.lock.json` as an artifact without deploying. Review and commit it.
    Do the same after any deliberate runtime change.
-
-On macOS runners, private repositories use GitHub Actions minutes at 10x; the uncached runtime
-build is the expensive part.
 
 ## Build and verify locally
 

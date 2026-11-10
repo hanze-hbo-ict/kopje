@@ -7,14 +7,19 @@ scripts/build-runtime-source.sh --modules minimal        # first run ~4 min on a
 RUNTIME_DIR=~/kopje-build/out-minimal npm run build
 ```
 
-`scripts/build-runtime-source.sh` (macOS/arm64 scripted; other hosts need the JDK set up by
-hand):
+`scripts/build-runtime-source.sh` (build hosts: macOS/arm64, Linux x64/aarch64; on Linux
+install autoconf, automake, libtool, make, zip, unzip and emsdk):
 
 1. **Copies** the pinned `vendor/javabox` checkout to `$KOPJE_BUILD_DIR/javabox`
    (default `~/kopje-build`). libtool and OpenJDK configure fail on paths with spaces,
    and this project lives under a path with spaces. It verifies the pinned commit.
 2. **Downloads Temurin 21.0.10+7** (SHA-256 checked) and uses it as boot JDK, javac and
-   jlink. It must match the HotSpot sources (`DEFAULT_VERSION_UPDATE=10` in the openjdk
+   jlink. The class library is always the **macOS/aarch64** one (ADR-8): jlink gets that
+   JDK's `jmods/` via `--module-path`, and the NIO patch compiles against its `java.base`
+   (`javac --system`). On Linux the script also downloads the Linux Temurin of the same
+   version to run the tools (cross-linking). `--module-path` is passed on macOS too, so both
+   hosts run the same jlink command; without it, jlink's generated `java.lang.invoke`
+   holder classes lack a `SourceFile` attribute (19 classes; code identical). It must match the HotSpot sources (`DEFAULT_VERSION_UPDATE=10` in the openjdk
    submodule); Homebrew's 21.0.13 produced a VM/class-library mismatch
    (`@IntrinsicCandidate` warnings at every boot).
 3. Runs upstream `build-jvm-wasm.sh` and `build-jdk-native.sh` unchanged
