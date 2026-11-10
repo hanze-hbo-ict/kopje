@@ -52,7 +52,7 @@ jobs:
         run: echo "javabox=$(git -C vendor/javabox rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Restore runtime
         id: runtime
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ${{ env.KOPJE_BUILD_DIR }}/out-minimal
           key: runtime-${{ runner.os }}-${{ runner.arch }}-emsdk${{ env.EMSDK_VERSION }}-${{ steps.key.outputs.javabox }}-${{ hashFiles('scripts/build-runtime-source.sh', 'scripts/build-nio-patch.sh', 'runtime/native/**') }}
@@ -70,6 +70,13 @@ jobs:
         run: |
           source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
           scripts/build-runtime-source.sh --modules minimal
+      # Saved right away, not in a post step, so a later failure (e.g. verify) keeps the build.
+      - name: Save runtime
+        if: steps.runtime.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.KOPJE_BUILD_DIR }}/out-minimal
+          key: ${{ steps.runtime.outputs.cache-primary-key }}
 
       - run: npm ci
       - name: Build dist
