@@ -14,8 +14,9 @@ IDE page (static)                         runtime iframe (one per run, disposabl
                                             └───────────────────────────────────────────┘
 ```
 
-Code: `runtime/java/CompileServer.java` (driver), `runtime/host/` (iframe),
-`runtime/engine/` (parent API), `runtime/slice.html` (Gate 2 test page).
+Code: `runtime/java/CompileServer.java` (driver), `public/runtime/host/` (iframe, plain JS,
+served unbundled), `src/runtime/` (`JavaEngine`, `JavaBoxEngine`, protocol types), `src/`
+(IDE), `slice.html` (engine test page).
 
 ## ADR-1 — Replace the driver at runtime, not by relinking (revised after testing)
 
@@ -113,8 +114,24 @@ run. On JDK 17 (host tests) the handler never fires and the process simply exits
 | # | Plan | Deviation | Reason |
 |---|---|---|---|
 | D1 | Gate 0: run upstream demo + tests | The prebuilt runtime ran via our own slice/e2e. Upstream's Playwright suite was not run | At first blocked by the session permission policy; unblocked once the user ran the e2e command. Upstream's suite targets Doom and its own UI, which we don't ship. |
-| D2 | Engine in TypeScript | Plain ES modules (`runtime/engine/*.js`) for the slice | Runs without a bundler while the runtime is unverified; port to TS with the Vite app in Phase 4. |
+| D2 | Engine in TypeScript | ~~Plain JS for the slice~~ **resolved**: ported to `src/runtime/*.ts` in Phase 3/4 | — |
 | D3 | Separate control/input channels | One-shot GO line on stdin + MEMFS sources + `/dev/jectl` | Achieves the separation without a native rebuild. |
 | D5 | Use JavaBox's SAB/Atomics stdin bridge | MEMFS append-file input channel | Prebuilt `available()` on fd 0 is broken and the ring has a lost-wakeup race; the file channel is observable and race-free. A source build could restore the ring once those are fixed. |
 | D6 | `System.exit` handled by the runtime | Observed through JDK 21 Runtime.exit logging | `onExit` never fires for `System.exit` in the prebuilt. |
+| D7 | Trim modules in upstream `build-jdk-modules.sh` | Our own jlink step in `scripts/build-runtime-source.sh`; upstream scripts otherwise unchanged | Avoids forking JavaBox; also pins the jlink JDK to 21.0.10 to match HotSpot. |
+| D8 | Build in the repo | Build in a space-free copy (`~/javaedit-build`) | libtool/OpenJDK configure fail on the project path, which contains spaces. |
+| D9 | Runtime iframe hosted on a separate origin | Same origin for now | Phase 5 not started; documented as a limitation. |
 | D4 | Fork of JavaBox | Pinned upstream submodule, driver replaced at runtime | No fork needed yet; native changes (futex fix, socket denial, Doom removal) would require one in Phase 3. |
+
+## ADR-7 — IDE structure (Phase 4)
+
+Klode's two-panel layout, tokens and controls are kept (`docs/klode-ui-reference.md`).
+Additions live *inside* those panels: a file column in the editor panel (a horizontal
+strip at ≤ 740 px), a main-class `<select>` beside Run, and diagnostics and status notes
+below the console transcript. One `EditorView` with one `EditorState` per file, so undo
+history and selection survive switching files. `ProjectManager` owns the files and path
+rules and emits changes; `SessionStore` persists `{files, mainClass, activeFile, theme}`:
+edits are debounced (400 ms), file and UI operations save immediately, and it falls back
+to memory on any storage error. File operations and the main-class picker are locked
+while a program runs; editing is allowed, because each run works on a snapshot of the
+files.

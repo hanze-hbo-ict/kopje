@@ -19,7 +19,10 @@ export class SessionStore {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private pending: Stored | null = null;
 
-  constructor(private readonly storage: Storage | null = SessionStore.available()) {
+  private readonly storage: Storage | null;
+
+  constructor(storage: Storage | null = SessionStore.available()) {
+    this.storage = storage;
     if (!this.storage) this.persistent = false;
   }
 

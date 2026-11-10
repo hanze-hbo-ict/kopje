@@ -2,7 +2,7 @@
 // Generates public/runtime/{driver,javabox}/ (git-ignored):
 //   driver/   javaedit driver classes (javac --release 17) + manifest.json
 //   javabox/  JavaBox runtime files copied from RUNTIME_DIR
-// RUNTIME_DIR defaults to ~/javaedit-build/out (source build, docs/runtime-build.md),
+// RUNTIME_DIR defaults to ~/javaedit-build/out-minimal (source build, docs/runtime-build.md),
 // falling back to runtime-prebuilt/ (upstream demo artifacts; contains Doom, dev only).
 import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, readdirSync, rmSync, writeFileSync, existsSync, statSync } from 'node:fs';
@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'public', 'runtime');
 const FILES = ['javabox-direct.mjs', 'javabox-direct.wasm', 'javabox-direct.data'];
-const candidates = [process.env.RUNTIME_DIR, join(homedir(), 'javaedit-build', 'out'), join(ROOT, 'runtime-prebuilt')].filter(Boolean);
+const candidates = [process.env.RUNTIME_DIR, join(homedir(), 'javaedit-build', 'out-minimal'), join(ROOT, 'runtime-prebuilt')].filter(Boolean);
 const runtimeDir = candidates.map((d) => resolve(d)).find((d) => FILES.every((f) => existsSync(join(d, f))));
 if (!runtimeDir) {
   console.error(`No JavaBox runtime found in:\n  ${candidates.join('\n  ')}\nSee docs/runtime-build.md.`);

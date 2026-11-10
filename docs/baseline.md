@@ -2,8 +2,9 @@
 
 **Status:** Gate 0 **met for the prebuilt runtime** (2026-11-10). Static reconnaissance,
 licence audit, host-side tests, and end-to-end runs in Chromium, Firefox and WebKit are done.
+A reproducible **source build** exists (`docs/runtime-build.md`) and is what we ship.
 Open: upstream's own Playwright suite was not run (it targets Doom/upstream UI, which we do
-not use), and no **source build** has been made yet (Phase 3).
+not use).
 
 ## Upstream pin
 
@@ -127,37 +128,58 @@ Also observed: the JVM's `Finalizer` and `Common-Cleaner` threads die with
 `NullPointerException` at every boot (upstream filters these by text); `System.exit` does
 **not** reach Emscripten `onExit`.
 
-## Metrics (headless, Apple M1 Pro, prebuilt runtime, `tests/e2e/slice.spec.mjs`)
+## Metrics (headless, Apple M1 Pro)
 
-| Metric | Chromium (headless shell 158) | Firefox 159 | WebKit 27.2 |
+**Shipped runtime** = source build, modules `java.base, java.logging, jdk.compiler`, jlinked
+with JDK 21.0.10, no Doom, no `ct.sym` (`docs/runtime-build.md`).
+
+| Metric | Chromium 158 | Firefox 159 | WebKit 27.2 |
 |---|---:|---:|---:|
-| Cold boot → driver `ready` (module + JVM + javac warm-up) | 1.8 s | 2.5 s | 2.1 s |
-| Run → first prompt (2 files, prewarmed JVM; mostly javac) | 1.9 s | 1.9 s | 1.9 s |
-| Compile+run, 2 files, prewarmed | 2.0 s | 2.6 s | 2.4 s |
-| javac alone, 1 small file (driver `compiled.ms`) | 1.3 s | — | — |
-| Stop latency (`engine.stop()` → `stopped`) | 10 ms | 14 ms | 15 ms |
-| Module instantiate (cached `.wasm`) | 0.15 s | — | — |
+| Cold boot → driver `ready` (module + JVM + javac warm-up) | 2.0 s | 2.2 s | 2.1 s |
+| Run → first prompt, 2 files (spare still booting) | 1.9 s | 1.9 s | 1.9 s |
+| **Compile+run, prewarmed spare** (Hello World; `soak.spec.mjs`) | 0.36–0.46 s | 0.30–0.32 s | 0.35–0.45 s |
+| Back-to-back compile+run (no time for the spare to boot) | 2.1 s | 2.5 s | 2.3 s |
+| Stop latency | 10–130 ms | 14–16 ms | 11–15 ms |
+| Growth over 12 runs in one page | +30 % | +8 % | +30 % |
 
-The JVM boots in about 0.2 s, and **javac in the Zero interpreter is the dominant
-cost**: around 1.3 s even for a trivial file. Upstream's "sub-second compile+run" is not
-reproduced for multi-file programs. Memory: 256 MB initial WASM memory per context
-(link flag); JS heap / WASM high-water mark are **not measured yet**.
+Upstream prebuilt for comparison: boot 1.8 / 2.5 / 2.1 s; identical behaviour.
 
-Totals: download 79.0 MB uncompressed / 48.0 MB brotli (prebuilt, incl. 30 MB Doom).
+The JVM itself starts in about 0.2 s. The javac warm-up compile (inside the boot) is the
+dominant cold cost; after it, compiling a small project takes a few hundred ms. Because
+the next runtime is pre-booted after each run, a student who reads the output before
+pressing Run again gets the ~0.3–0.45 s path.
+
+**Unexplained observation:** in one 27-minute full-suite run (all specs, all browsers,
+sequentially) the Firefox and WebKit slice measured 10× slower (boot 19–24 s, compile+run
+32–58 s); all tests still passed. Isolated reruns and the 12-run soak test do not
+reproduce it. At the time the host was heavily loaded (load average ~120; `fileproviderd`
+and Spotlight busy, as the project lives in a synced `~/Documents`), but the load was still
+high during the fast reruns, so the cause is **not established**.
+
+Sizes:
+
+| | `.wasm` | `.data` | brotli total (approx.) |
+|---|---:|---:|---:|
+| Upstream prebuilt | 3.27 MB | 75.6 MB | 48.0 MB |
+| Shipped source build | 3.20 MB | 15.6 MB | not measured |
+
+Memory: 256 MB initial / 512 MB max shared WASM memory per runtime context (link flags); at
+most two contexts exist (active + spare). JS heap / RSS high-water mark: not measured.
 
 ## Tests
 
 | Suite | Command | Result (2026-11-10) |
 |---|---|---|
 | Upstream Playwright | `npx playwright test` in `vendor/javabox` | not run — tests Doom/upstream UI we do not ship |
-| javaedit unit (paths) | `npm run test:unit` | 6/6 pass |
+| javaedit unit (paths, project, session storage) | `npm run test:unit` | 13/13 pass |
 | javaedit driver on host JDK 17 | `npm run test:host` | 14/14 pass |
-| Gate 2 slice | `npm run build:runtime && npx playwright test slice` | 2/2 pass in Chromium, Firefox, WebKit |
-| Capability probes | `npx playwright test capabilities --project=chromium` | 10/10 pass (see capability-matrix.md) |
+| Gate 2 slice | `npx playwright test slice` | 2/2 pass in Chromium, Firefox, WebKit (prebuilt and shipped runtime) |
+| Gate 4 IDE | `npx playwright test ide` | 2/2 pass in Chromium, Firefox, WebKit |
+| Capability probes | `npx playwright test capabilities` | 10/10 pass in all three (see capability-matrix.md) |
+| Soak (12 runs/page) | `npx playwright test soak` | pass in all three |
+| Full e2e, shipped runtime | `npm run build && npm run test:e2e` | 42/42 passed (27.5 min, see observation above) |
 
-Upstream source build: not attempted yet. Prerequisites present: emcc 5.0.2 (upstream
-tested with 5.0.2), Docker. Missing: JDK 21 (`brew install openjdk@21`); GNU grep and
-autotools not checked.
+Upstream source build: **done** (2026-11-10, 3 min 41 s first build on the M1 Pro), see `docs/runtime-build.md`.
 
 **Harness note:** port 5173 on this machine was already taken by an unrelated Vite app,
 and `reuseExistingServer` silently tested *that* app. The dev server now uses port 5391

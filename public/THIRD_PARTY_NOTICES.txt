@@ -1,0 +1,39 @@
+javaedit — third-party notices
+
+This application runs entirely in your browser. It bundles or loads:
+
+OpenJDK 21 (HotSpot Zero VM, java.base/java.logging/jdk.compiler class library)
+  Licence: GNU General Public License, version 2, with the Classpath Exception
+  (and the OpenJDK Assembly Exception). Per-module licence files are included in the
+  runtime image under /opt/jdk/legal/. Corresponding source: OpenJDK fork
+  https://github.com/bmarti44/openjdk (branch wasm-emscripten), commit
+  e339656cdd1c9e09aaf1c4ca9a87c399e3df56a7; class library jlinked from Eclipse
+  Temurin 21.0.10+7. Build script: scripts/build-runtime-source.sh in this project.
+
+JavaBox (browser JVM embedding, build scripts)
+  https://github.com/bmarti44/javabox, commit 506756b78cacedc23026fb4445e4cb57e11048b1
+  MIT License, Copyright (c) 2026 Brian Martin
+
+libffi (Emscripten port, commit 0b72a27b7cd647eb31f15144dcfeacde864de9f1)
+  MIT-style licence, Copyright (c) 1996-2024 Anthony Green, Red Hat, Inc and others
+
+Emscripten runtime support code
+  MIT License / University of Illinois/NCSA Open Source License
+
+CodeMirror 6 (@codemirror/*) and Lezer (@lezer/*)
+  MIT License, Copyright (C) 2018-2021 by Marijn Haverbeke and others
+
+Klode (UI design tokens, layout and interaction patterns)
+  https://github.com/hanze-hbo-ict/klode
+  MIT License, Copyright (c) 2026 Codeklad contributors
+
+The full text of the MIT License:
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this
+  software and associated documentation files (the "Software"), to deal in the Software
+  without restriction, including without limitation the rights to use, copy, modify,
+  merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+  permit persons to whom the Software is furnished to do so, subject to the following
+  conditions: The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS",
+  WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.

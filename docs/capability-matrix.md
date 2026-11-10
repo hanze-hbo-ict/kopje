@@ -1,8 +1,9 @@
-# Capability matrix (prebuilt runtime, verified 2026-11-10)
+# Capability matrix (verified 2026-11-10)
 
 Status values: **allowed / denied / unsupported / unverified**. Probes:
-`tests/e2e/capabilities.spec.mjs` (Chromium); lifecycle: `tests/e2e/slice.spec.mjs`
-(Chromium, Firefox, WebKit). This is a best-effort, capability-restricted environment,
+`tests/e2e/capabilities.spec.mjs`; lifecycle: `tests/e2e/slice.spec.mjs` and
+`tests/e2e/ide.spec.mjs`. Results are identical for the upstream prebuilt and for our trimmed
+source build (`java.base, java.logging, jdk.compiler`), which is what we ship. This is a best-effort, capability-restricted environment,
 **not** a verified sandbox.
 
 | Capability | Status | Enforcement layer | Evidence |
@@ -23,5 +24,5 @@ Status values: **allowed / denied / unsupported / unverified**. Probes:
 | CPU time | bounded by wall clock (120 s, excluding stdin wait) | engine timer + teardown | not a CPU quota |
 | Memory | bounded: 512 MB WASM max, `-Xmx128m` | link flag, JVM | high-water mark not measured |
 | Threads in student code | unverified / out of scope | pool of 16 pthreads | — |
-| Doom graphics/audio/input natives | present in binary, unreachable (Doom classes removed from MEMFS) | removal pending source build | — |
+| Doom graphics/audio/input natives | **present in the `.wasm`** (from `jvm-main.c`), unreachable: no Doom classes and no `java.desktop` in the trimmed image | removing them needs a JavaBox fork | — |
 | Spoofing driver control events | **allowed (residual)** | — | affects own console only |
