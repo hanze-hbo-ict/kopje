@@ -41,5 +41,5 @@ configuration (minus Python), focus treatment, mobile stacking breakpoint, foote
 | stderr and exit status | stderr is shown inline in the transcript in the error colour (preserving interleaving). A non-zero exit, Stop, timeout or output limit adds one muted status line. |
 | EOF | Ctrl+D in the input line sends end-of-input (described in the input's help text). |
 | Session restore | Klode keeps nothing; we restore files and UI state from `sessionStorage` on reload of the same tab. |
-| Branding | Own mark "ko." and the name "Kopje" (Dutch for "cup", a nod to Java's coffee; keeps the Java trademark out of the name), tagline "A little room for Java.". The structure deliberately mirrors Klode, but the name is not used so it isn't mistaken for Klode itself. |
+| Branding | Klode's "k." mark (same icon, by choice) and the name "Kopje" (Dutch for "cup", a nod to Java's coffee; keeps the Java trademark out of the name), tagline "A little room for Java.". The structure deliberately mirrors Klode, but the name is not used so it isn't mistaken for Klode itself. |
 | Eyebrow / motto | "JAVA WORKSPACE" / "A few files. One idea at a time." |

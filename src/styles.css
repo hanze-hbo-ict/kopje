@@ -88,7 +88,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .brand { display: flex; align-items: center; gap: 13px; }
 .brand-mark {
-  font-size: 24px; font-weight: 750; background: var(--ink); color: var(--panel);
+  font-size: 31px; font-weight: 750; background: var(--ink); color: var(--panel);
   border-radius: 12px; width: 46px; height: 46px; display: grid; place-items: center;
   letter-spacing: -2px; padding-right: 3px;
 }
@@ -241,7 +241,7 @@ dialog#transfer h2 { font-size: 15px; margin: 0 0 6px; }
   .app-header, main, .app-footer { padding-left: 16px; padding-right: 16px; }
   .app-header { padding-top: 14px; padding-bottom: 14px; }
   .brand p { display: none; }
-  .brand-mark { width: 36px; height: 36px; font-size: 19px; border-radius: 9px; }
+  .brand-mark { width: 36px; height: 36px; font-size: 26px; border-radius: 9px; }
   .brand h1 { font-size: 21px; }
   main { padding-top: 16px; padding-bottom: 16px; }
   .workspace-heading { align-items: flex-start; flex-direction: column; gap: 5px; margin-bottom: 12px; }
