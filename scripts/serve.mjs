@@ -5,7 +5,7 @@
 import { createServer } from 'node:http';
 import { createReadStream, statSync } from 'node:fs';
 import { join, resolve, extname, normalize, sep } from 'node:path';
-import { SECURITY_HEADERS, cacheControlFor } from '../security-headers.mjs';
+import { SECURITY_HEADERS, RUNTIME_EXTRA, isRuntimePath, cacheControlFor } from '../security-headers.mjs';
 
 const root = resolve(process.argv[2] || 'dist');
 const port = Number(process.argv[3] || 5391);
@@ -25,6 +25,12 @@ createServer((req, res) => {
   if (st.isDirectory()) { res.writeHead(404).end(); return; }
   const etag = `"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`;
   const headers = { ...SECURITY_HEADERS, 'Cache-Control': cacheControlFor(url.pathname), ETag: etag };
+  if (isRuntimePath(url.pathname)) {
+    // Two CSP headers are both enforced; node's http joins array values into separate lines.
+    headers['Content-Security-Policy'] = [SECURITY_HEADERS['Content-Security-Policy'], RUNTIME_EXTRA['Content-Security-Policy']];
+    headers['Cross-Origin-Resource-Policy'] = RUNTIME_EXTRA['Cross-Origin-Resource-Policy'];
+    headers['Access-Control-Allow-Origin'] = RUNTIME_EXTRA['Access-Control-Allow-Origin'];
+  }
   if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers).end(); return; }
   res.writeHead(200, { ...headers, 'Content-Type': TYPES[extname(file)] || 'application/octet-stream', 'Content-Length': st.size });
   if (req.method === 'HEAD') { res.end(); return; }

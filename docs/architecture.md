@@ -120,7 +120,7 @@ run. On JDK 17 (host tests) the handler never fires and the process simply exits
 | D6 | `System.exit` handled by the runtime | Observed through JDK 21 Runtime.exit logging | `onExit` never fires for `System.exit` in the prebuilt. |
 | D7 | Trim modules in upstream `build-jdk-modules.sh` | Our own jlink step in `scripts/build-runtime-source.sh`; upstream scripts otherwise unchanged | Avoids forking JavaBox; also pins the jlink JDK to 21.0.10 to match HotSpot. |
 | D8 | Build in the repo | Build in a space-free copy (`~/javaedit-build`) | libtool/OpenJDK configure fail on the project path, which contains spaces. |
-| D9 | Runtime iframe hosted on a separate origin | Same origin for now | Phase 5 not started; documented as a limitation. |
+| D9 | Runtime iframe hosted on a separate origin | Opaque-origin sandbox on the same host (ADR-10); same-origin fallback on WebKit | No second origin to whitelist; WebKit can't isolate sandboxed frames. |
 | D4 | Fork of JavaBox | Pinned upstream submodule, driver replaced at runtime | No fork needed yet; native changes (futex fix, socket denial, Doom removal) would require one in Phase 3. |
 
 ## ADR-7 — IDE structure (Phase 4)
@@ -165,3 +165,32 @@ decompresses with `DecompressionStream`, handing the results to Emscripten throu
 the static host compresses binary types. The jimage is linked uncompressed (`zip-0`), which
 gzips far better (10.3 MB vs 14.5 MB). Measured (Chromium, persistent profile): first load
 12.0 MB, reload 0.8 KB.
+
+## ADR-10 — Opaque-origin sandbox for the runtime (Phase 5, S4)
+
+Each runtime iframe has `sandbox="allow-scripts"` (no `allow-same-origin`) and
+`allow="cross-origin-isolated"`, so it gets an **opaque origin**: even code that escaped the
+WASM sandbox could not read the IDE's DOM, `sessionStorage` or cookies. No second origin or
+whitelist entry is needed.
+
+- **No network in the sandbox.** The IDE page fetches the runtime files once (module source,
+  `.wasm.gz`, `.data.gz`, driver classes) and posts a copy to each new frame, which asks for
+  them with `awaiting-assets`. `/runtime/*` responses carry a second CSP,
+  `connect-src 'none'`, enforced alongside the main one. (This also avoids a WebKit
+  difference: it evaluates `'self'` in an opaque-origin frame as the opaque origin.)
+- **Workers.** Opaque origins may not start Workers from http(s) URLs, and Chromium refuses
+  *module* Workers from Blob URLs there. The module runs from a Blob URL
+  (`mainScriptUrlOrBlob`), and the runtime host wraps `Worker` so Emscripten's pthreads start
+  as **classic** Blob Workers that `import()` the module and replay early messages. CSP allows
+  `blob:` for `script-src`/`worker-src`.
+- **Headers.** `/runtime/*`: `Cross-Origin-Resource-Policy: cross-origin` (Firefox requires
+  it for the frame document under COEP) and `Access-Control-Allow-Origin: *` (the frame's
+  module script is a CORS request); these are public static files.
+- **Messages.** The engine accepts messages only from its frame's window with origin `"null"`
+  and posts with target `'*'` to that window. The frame posts to `parent` with `'*'`; only our
+  pages can be its parent because of `frame-ancestors 'self'`.
+- **WebKit fallback.** WebKit doesn't make opaque-origin frames cross-origin isolated, so the
+  frame can't share WASM memory with its Workers (`DataCloneError`). The frame reports
+  `isolated: false`; the engine then reloads it without `sandbox` (same-origin) for the rest of
+  the session. In that mode the frame still fetches nothing and keeps `connect-src 'none'`.
+  Verified: Chromium and Firefox sandboxed (Gate 5, `isolation.spec.mjs`), WebKit fallback.

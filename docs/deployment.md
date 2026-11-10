@@ -10,10 +10,14 @@
   their cookies and storage (S5). The IDE sets no cookies; keep it that way.
 - [ ] The host applies **`dist/_headers`** (Netlify, Cloudflare Pages) or equivalent rules
   from `security-headers.mjs`:
-  - every response: COOP `same-origin`, COEP `require-corp`, CORP `same-origin`, the CSP,
+  - every response: COOP `same-origin`, COEP `require-corp`, the CSP,
     `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
     `Permissions-Policy`
   - `/assets/*`, `/runtime/*`: `Cache-Control: public, max-age=31536000, immutable`
+  - `/runtime/*` additionally: `Cross-Origin-Resource-Policy: cross-origin`,
+    `Access-Control-Allow-Origin: *` and a second CSP `connect-src 'none'` (the sandboxed
+    runtime frame has an opaque origin; ADR-10); `/`, `/index.html`, `/assets/*`:
+    `Cross-Origin-Resource-Policy: same-origin`
   - `/`, `/index.html`: `Cache-Control: no-cache`
   Without COOP/COEP, Java can't start (no `SharedArrayBuffer`).
 - [ ] MIME types: `.wasm` `application/wasm`, `.mjs`/`.js` JavaScript, `.gz` served as-is

@@ -41,9 +41,13 @@ test('S2: the page cannot reach other origins; the IDE still works under the CSP
   expect(unexpected, violations.join('\n')).toEqual([]);
 });
 
-test('S1: runtime URL parameters cannot choose code, classes or JVM options', async ({ page }) => {
+test('S1/S4: the runtime frame ignores URL parameters and fetches nothing itself', async ({ page }) => {
   const foreign = [];
-  page.on('request', (r) => { if (r.url().startsWith(ATTACKER)) foreign.push(r.url()); });
+  const frameRequests = [];
+  page.on('request', (r) => {
+    if (r.url().startsWith(ATTACKER)) foreign.push(r.url());
+    if (r.frame() && r.frame() !== page.mainFrame() && r.frame().name() === 'probe') frameRequests.push(new URL(r.url()).pathname);
+  });
   const events = [];
   await page.exposeFunction('__ev', (e) => events.push(e));
   // Only events from the injected frame count (the IDE boots its own spare runtime too).
@@ -52,14 +56,18 @@ test('S1: runtime URL parameters cannot choose code, classes or JVM options', as
     if (probe && e.source === probe.contentWindow && e.data?.type === 'event') window.__ev(e.data.event);
   }));
   const q = new URLSearchParams({ runtime: ATTACKER, driver: ATTACKER, jvmArg: '-version', outputCap: '9999999999999' });
-  // The runtime document posts to its parent; load it inside a same-origin wrapper page.
   await page.goto('/');
   await page.evaluate((src) => {
     const f = document.createElement('iframe');
     f.id = 'probe';
+    f.name = 'probe';
+    f.setAttribute('sandbox', 'allow-scripts');
     f.src = src;
     document.body.append(f);
   }, `${RUNTIME_BASE}/host/runtime.html?${q}`);
-  await expect.poll(() => events.some((e) => e.kind === 'ready'), { timeout: 120_000 }).toBe(true);
+  // The frame asks its parent for the runtime files instead of fetching them.
+  await expect.poll(() => events.some((e) => e.kind === 'awaiting-assets'), { timeout: 60_000 }).toBe(true);
+  await page.waitForTimeout(1000);
   expect(foreign, 'no request may go to the attacker origin').toEqual([]);
+  expect(frameRequests.filter((p) => !/\/host\/(runtime\.html|runtime-host\.js)$/.test(p)), 'frame fetched only its document and script').toEqual([]);
 });

@@ -15,7 +15,7 @@ function rendererRssMb() {
 const heapsMb = (page) => page.evaluate(() => Promise.all([...document.querySelectorAll('iframe')].map((f) => new Promise((resolve) => {
   const on = (e) => { if (e.source === f.contentWindow && e.data?.event?.kind === 'stats') { removeEventListener('message', on); resolve(Math.round(e.data.event.heapBytes / 1e6)); } };
   addEventListener('message', on);
-  f.contentWindow.postMessage({ type: 'stats' }, location.origin);
+  f.contentWindow.postMessage({ type: 'stats' }, '*'); // the sandboxed frame's origin is opaque
   setTimeout(() => resolve(null), 2000);
 }))));
 

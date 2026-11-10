@@ -16,6 +16,7 @@ export type RuntimeErrorKind =
 
 /** Lifecycle and I/O events delivered to JavaEngine.run's callback. */
 export type RuntimeEvent =
+  | { kind: 'awaiting-assets'; isolated: boolean }
   | { kind: 'initializing' }
   | { kind: 'ready' }
   | { kind: 'compiling' }
@@ -40,8 +41,18 @@ export type RunResult =
   | { status: 'output-limit' }
   | { status: 'error'; message: string };
 
+/** Runtime files handed to the sandboxed frame (it has no network access). */
+export interface RuntimeAssets {
+  module: string;                       // javabox-direct.mjs source
+  wasm: ArrayBuffer;                    // javabox-direct.wasm(.gz)
+  data: ArrayBuffer;                    // javabox-direct.data(.gz)
+  compressed: boolean;                  // true: wasm/data are gzip
+  driver: [string, ArrayBuffer][];      // driver class files
+}
+
 /** Parent -> runtime iframe. */
 export type HostCommand =
+  | { type: 'init'; assets: RuntimeAssets }
   | { type: 'start'; files: SourceMap; mainClass: string }
   | { type: 'stdin'; text: string }
   | { type: 'eof' };

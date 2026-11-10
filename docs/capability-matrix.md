@@ -19,7 +19,8 @@ source build (`java.base, java.logging, jdk.compiler`), which is what we ship. T
 | `Files.getFileStore`, `Files.probeContentType` | **unsupported** | call macOS-only natives that are not linked → `UnsatisfiedLinkError` | — |
 | `ProcessBuilder` / `Runtime.exec` | **denied** | `posix_spawn` → ENOSYS | probes `process`, `exec` |
 | `System.loadLibrary` / `System.load` | **denied** | no dynamic loader; static symbol table only | probes `loadLibrary`, `load` |
-| IDE `sessionStorage` from student code | unsupported (no Java→JS bridge) | same-origin iframe; no eval-like import | static import audit. Phase 5: separate origin |
+| IDE DOM, `sessionStorage`, cookies from the runtime | **denied** (Chromium/Edge, Firefox); unsupported (WebKit: no Java→JS bridge, same-origin fallback) | opaque-origin sandboxed iframe (ADR-10) | `isolation.spec.mjs` Gate 5 |
+| Network from the runtime frame | **denied** | second CSP `connect-src 'none'` on `/runtime/*`; files come from the parent | `security.spec.mjs` S1/S4 |
 | IndexedDB / localStorage / OPFS from runtime | unsupported | not linked | static grep of glue |
 | `System.exit` | allowed: ends the run only | ADR-6 + iframe teardown | slice spec: exit code 3 then clean run |
 | CPU time | bounded by wall clock (120 s, excluding stdin wait) | engine timer + teardown | not a CPU quota |

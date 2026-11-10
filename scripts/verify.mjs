@@ -27,7 +27,8 @@ if (distArg) {
   const dist = resolve(distArg);
   const headers = existsSync(join(dist, '_headers')) ? readFileSync(join(dist, '_headers'), 'utf8') : '';
   if (!headers) fail('dist/_headers is missing');
-  for (const h of ['Cross-Origin-Opener-Policy: same-origin', 'Cross-Origin-Embedder-Policy: require-corp', 'Content-Security-Policy:', "frame-ancestors 'self'", 'immutable']) {
+  for (const h of ['Cross-Origin-Opener-Policy: same-origin', 'Cross-Origin-Embedder-Policy: require-corp', 'Content-Security-Policy:', "frame-ancestors 'self'", 'immutable',
+                   "connect-src 'none'", 'Cross-Origin-Resource-Policy: cross-origin', 'Access-Control-Allow-Origin: *']) {
     if (!headers.includes(h)) fail(`dist/_headers lacks "${h}"`);
   }
   if (existsSync(join(dist, 'slice.html'))) fail('dist/slice.html is a test page (S6); build with `npm run build`, not build:test');

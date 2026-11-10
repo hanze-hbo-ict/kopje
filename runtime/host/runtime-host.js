@@ -12,18 +12,22 @@
 const EOF_BYTE = 0x04;             // driver maps 0x04 to end-of-stream
 const FLUSH_MS = 16;
 
-// Security (PLAN.md §13 S1): asset locations are fixed and same-origin. No URL parameter
-// may choose code, classes or JVM options; outputCap is the only parameter and is clamped.
-const RUNTIME_BASE = new URL('../javabox/', location.href).href;
-const DRIVER_BASE = new URL('../driver/', location.href).href;
+// Security (PLAN.md §13 S1, S4): this frame fetches nothing. The IDE page sends the runtime
+// files (module source, .wasm, .data, driver classes) by postMessage, and the frame's CSP is
+// connect-src 'none'. No URL parameter may choose code, classes or JVM options; outputCap is
+// the only parameter and is clamped.
 const OUTPUT_CAP = (() => {
   const raw = new URLSearchParams(location.search).get('outputCap');
   const n = raw !== null && /^[0-9]{1,9}$/.test(raw) ? Number(raw) : 1_000_000;
   return Math.min(Math.max(n, 1_000), 10_000_000);   // bytes
 })();
 
-const parentOrigin = location.origin;   // same-origin topology (Phase 5 may change this)
-const post = (event) => parent.postMessage({ type: 'event', event }, parentOrigin);
+// Phase 5 (S4): this document normally runs in a sandboxed iframe with an opaque origin, so it
+// has no access to the IDE's DOM, storage or cookies (WebKit: same-origin fallback, see the
+// engine). The parent's origin can't be named from an opaque origin, so messages go to
+// `parent` with target "*". That is safe: the runtime document's CSP (frame-ancestors 'self')
+// means only our own pages can be the parent.
+const post = (event) => parent.postMessage({ type: 'event', event }, '*');
 
 let Module = null;
 let started = false;
@@ -125,9 +129,15 @@ addEventListener('error', (e) => {
 
 // ── messages from the parent ────────────────────────────────────────────────────
 addEventListener('message', (e) => {
-  if (e.origin !== parentOrigin || e.source !== parent) return;
+  if (e.source !== parent) return;
   const m = e.data;
-  if (!m || typeof m.type !== 'string' || !Module) return;
+  if (!m || typeof m.type !== 'string') return;
+  if (m.type === 'init' && !assetsReceived) {
+    assetsReceived = true;
+    boot(m.assets).catch((err) => post({ kind: 'error', errorKind: 'boot', message: String(err && err.stack || err) }));
+    return;
+  }
+  if (!Module) return;
   if (m.type === 'start' && !started) {
     started = true;
     const FS = Module.FS;
@@ -150,37 +160,70 @@ addEventListener('message', (e) => {
 });
 
 // ── boot ───────────────────────────────────────────────────────────────────────
-// ── fetching the large runtime files ───────────────────────────────────────────
-// E5: the .wasm and .data are fetched as .gz and decompressed here, so transfer size does
-// not depend on the static host compressing binary types. Falls back to the raw files when
-// DecompressionStream is unavailable (Safari < 16.4).
-async function fetchBytes(name) {
-  if (typeof DecompressionStream === 'function') {
-    const res = await fetch(RUNTIME_BASE + name + '.gz');
-    if (res.ok && res.body) {
-      return new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
-    }
-  }
-  const res = await fetch(RUNTIME_BASE + name);
-  if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`);
-  return res.arrayBuffer();
+let assetsReceived = false;
+
+/** gzip-compressed bytes (E5) -> ArrayBuffer, or the bytes as-is when not compressed. */
+async function inflate(bytes, compressed) {
+  if (!compressed) return bytes;
+  return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
 }
 
-async function boot() {
-  if (!crossOriginIsolated) { post({ kind: 'error', errorKind: 'not-isolated', message: 'SharedArrayBuffer unavailable: COOP/COEP headers missing' }); return; }
+// ── pthread Workers from an opaque origin ─────────────────────────────────────────
+// A sandboxed (opaque-origin) document may not start Workers from http(s) URLs, and
+// Chromium also refuses *module* Workers from Blob URLs there; classic Blob Workers work
+// (probe in PLAN.md §14). Emscripten starts its pthreads as module Workers named
+// "em-pthread", so those get a classic Blob Worker that import()s the real module and
+// replays messages that arrived while the import was loading. Other Workers are untouched.
+// WebKit additionally refuses to clone a compiled WebAssembly.Module into these Workers
+// (DataCloneError). Then the WASM bytes are sent instead and the Worker compiles them before
+// Emscripten's handler sees the message (in order, via a promise chain).
+let wasmBytesForWorkers = null;
+const NativeWorker = self.Worker;
+self.Worker = class PthreadWorker extends NativeWorker {
+  constructor(url, options = {}) {
+    if (!String(options.name ?? '').startsWith('em-pthread')) { super(url, options); return; }
+    const moduleUrl = String(url);   // the module's Blob URL (mainScriptUrlOrBlob below)
+    const bootstrap = `let chain = Promise.resolve(), handle = null; const queued = [];
+const fix = async (e) => { const d = e.data; if (d && d.javaeditWasmBytes) { d.wasmModule = await WebAssembly.compile(d.javaeditWasmBytes); delete d.javaeditWasmBytes; } return e; };
+self.onmessage = (e) => { chain = chain.then(() => fix(e)).then((ev) => handle ? handle(ev) : queued.push(ev)); };
+import(${JSON.stringify(moduleUrl)}).then(() => {
+  const emscripten = self.onmessage === null ? null : self.onmessage;
+  handle = emscripten;
+  self.onmessage = (e) => { chain = chain.then(() => fix(e)).then((ev) => handle(ev)); };
+  chain = chain.then(() => { for (const ev of queued.splice(0)) handle(ev); });
+}, (err) => setTimeout(() => { throw err; }));`;
+    const blob = URL.createObjectURL(new Blob([bootstrap], { type: 'text/javascript' }));
+    super(blob, { name: options.name });
+  }
+  postMessage(message, transfer) {
+    try {
+      super.postMessage(message, transfer);
+    } catch (err) {
+      if (err?.name !== 'DataCloneError' || !(message?.wasmModule instanceof WebAssembly.Module) || !wasmBytesForWorkers) throw err;
+      const { wasmModule, ...rest } = message;
+      super.postMessage({ ...rest, javaeditWasmBytes: wasmBytesForWorkers }, transfer);
+    }
+  }
+};
+
+async function boot(assets) {
+  // Feature check rather than crossOriginIsolated: WebKit reports false in an opaque-origin
+  // frame although SharedArrayBuffer and shared WASM memory work there.
+  if (typeof SharedArrayBuffer !== 'function') { post({ kind: 'error', errorKind: 'not-isolated', message: 'SharedArrayBuffer unavailable: COOP/COEP headers missing' }); return; }
   const t0 = performance.now();
-  const manifest = await (await fetch(DRIVER_BASE + 'manifest.json')).json();
-  const driverFiles = await Promise.all(manifest.classes.map(async (name) =>
-    [name, new Uint8Array(await (await fetch(DRIVER_BASE + encodeURIComponent(name))).arrayBuffer())]));
+  const driverFiles = assets.driver.map(([name, bytes]) => [name, new Uint8Array(bytes)]);
+  // The module runs from a Blob URL; the same URL starts its pthread Workers.
+  const moduleUrl = URL.createObjectURL(new Blob([assets.module], { type: 'text/javascript' }));
   const [{ default: createModule }, wasmModule, dataPackage] = await Promise.all([
-    import(RUNTIME_BASE + 'javabox-direct.mjs'),
-    fetchBytes('javabox-direct.wasm').then((b) => WebAssembly.compile(b)),
-    fetchBytes('javabox-direct.data'),
+    import(moduleUrl),
+    inflate(assets.wasm, assets.compressed).then((b) => { wasmBytesForWorkers = b; return WebAssembly.compile(b); }),
+    inflate(assets.data, assets.compressed),
   ]);
   post({ kind: 'initializing' });
 
   Module = await createModule({
-    locateFile: (p) => RUNTIME_BASE + p,
+    locateFile: (p) => p,          // never used: every file is supplied below
+    mainScriptUrlOrBlob: moduleUrl,
     // Hand Emscripten the already-fetched, decompressed files (it also posts the compiled
     // module to its pthread Workers, so they don't fetch the .wasm again).
     instantiateWasm(imports, receive) {
@@ -235,4 +278,7 @@ async function boot() {
   post({ kind: 'log', message: `module instantiated in ${Math.round(performance.now() - t0)} ms` });
 }
 
-boot().catch((err) => post({ kind: 'error', errorKind: 'boot', message: String(err && err.stack || err) }));
+// Ask the IDE page for the runtime files; boot() starts when they arrive. `isolated` tells the
+// page whether this (sandboxed) frame can share WASM memory with Workers; WebKit does not make
+// opaque-origin frames cross-origin isolated, and then the page reloads us without the sandbox.
+post({ kind: 'awaiting-assets', isolated: self.crossOriginIsolated === true });

@@ -13,6 +13,6 @@ test('boot diagnostics', async ({ page }) => {
     addEventListener('message', (e) => { if (e.data?.type === 'event') window.__diag?.('event ' + JSON.stringify(e.data.event).slice(0, 400)); });
   });
   await page.goto('/slice.html');
-  await page.waitForFunction(() => window.bootMs !== undefined, null, { timeout: 90_000 }).catch(() => log('NOT READY'));
+  await page.waitForFunction(() => window.bootMs !== undefined, null, { timeout: 25_000 }).catch(() => log('NOT READY'));
   log('status: ' + await page.locator('#status').textContent());
 });

@@ -4,10 +4,12 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
 
 ## Security and isolation
 
-- **Not a verified sandbox.** Student code runs in a WebAssembly JVM inside a **same-origin**
-  iframe. Isolation rests on (a) no Java→JavaScript bridge in the runtime's host imports,
-  (b) libnet not being linked, and (c) per-run teardown. A same-origin iframe is a
-  termination boundary, **not** a security-origin boundary (Phase 5: separate origin).
+- **Not a verified sandbox.** Student code runs in a WebAssembly JVM inside an
+  **opaque-origin sandboxed iframe** without network access (ADR-10). Isolation rests on
+  (a) no Java→JavaScript bridge in the runtime's host imports, (b) no networking (libnet and
+  sockets not linked, `connect-src 'none'`), (c) the opaque origin, and (d) per-run teardown.
+  **Safari/WebKit** can't run the runtime in the sandbox (it doesn't isolate opaque-origin
+  frames) and uses a same-origin frame instead, so (c) doesn't apply there.
 - **No socket layer.** Java networking fails (`InetAddress.<clinit>`), socket syscalls return
   `EACCES` and SOCKFS is not linked (N1); the CSP `connect-src 'self'` is a second layer.
 - **Headers are part of the security model.** The CSP, COOP/COEP and framing headers come

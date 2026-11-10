@@ -7,7 +7,7 @@
 
 import { validateFiles, isValidMainClass, sanitizeInput } from '../project/paths.ts';
 import type { JavaEngine } from './JavaEngine.ts';
-import type { HostCommand, RunResult, RuntimeEvent, SourceMap } from './runtime-protocol.ts';
+import type { HostCommand, RunResult, RuntimeAssets, RuntimeEvent, SourceMap } from './runtime-protocol.ts';
 import { RUNTIME_PATH } from './runtime-location.generated.ts';
 
 export interface EngineOptions {
@@ -35,6 +35,44 @@ const DEFAULTS: EngineOptions = {
   prewarm: !lowMemoryDevice(),
 };
 
+/**
+ * The sandboxed runtime frame fetches nothing (CSP connect-src 'none'); this page loads the
+ * runtime files once and hands a copy to every new frame. gzip variants are used when the
+ * browser can decompress them (E5).
+ */
+let assetsPromise: Promise<RuntimeAssets> | null = null;
+function loadAssets(runtimeUrl: string): Promise<RuntimeAssets> {
+  assetsPromise ??= (async () => {
+    const base = new URL('../', runtimeUrl);
+    const get = async (path: string) => {
+      const res = await fetch(new URL(path, base));
+      if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
+      return res;
+    };
+    const compressed = typeof DecompressionStream === 'function';
+    const ext = compressed ? '.gz' : '';
+    const manifest = (await (await get('driver/manifest.json')).json()) as { classes: string[] };
+    const [module, wasm, data, driver] = await Promise.all([
+      get('javabox/javabox-direct.mjs').then((r) => r.text()),
+      get(`javabox/javabox-direct.wasm${ext}`).then((r) => r.arrayBuffer()),
+      get(`javabox/javabox-direct.data${ext}`).then((r) => r.arrayBuffer()),
+      Promise.all(manifest.classes.map(async (name) =>
+        [name, await (await get(`driver/${encodeURIComponent(name)}`)).arrayBuffer()] as [string, ArrayBuffer])),
+    ]);
+    return { module, wasm, data, compressed, driver };
+  })();
+  assetsPromise.catch(() => { assetsPromise = null; });
+  return assetsPromise;
+}
+
+/**
+ * Phase 5 (S4): runtimes run in an opaque-origin sandbox where the browser supports it. WebKit
+ * does not make such frames cross-origin isolated, so JavaBox's shared-memory pthreads can't
+ * start there; after the first such report, runtimes use a same-origin frame instead.
+ */
+let sandboxSupported = true;
+export const runtimeIsolation = () => (sandboxSupported ? 'sandboxed' : 'same-origin');
+
 const TERMINAL_ERRORS = new Set(['abort', 'boot', 'fatal', 'not-isolated', 'stack-overflow']);
 
 class RuntimeContext {
@@ -46,9 +84,12 @@ class RuntimeContext {
   private readyAt = 0;
   private readonly bootTimer: ReturnType<typeof setTimeout>;
   private readonly listener = (e: MessageEvent) => this.handle(e);
+  private readonly runtimeUrl: string;
+  private sandboxed: boolean;
 
   constructor(opts: EngineOptions, onEvent: (ev: RuntimeEvent) => void) {
     this.onEvent = onEvent;
+    this.runtimeUrl = opts.runtimeUrl;
     this.ready = new Promise<void>((res, rej) => { this.resolveReady = res; this.rejectReady = rej; });
     this.ready.catch(() => {});
     this.iframe = document.createElement('iframe');
@@ -56,6 +97,11 @@ class RuntimeContext {
     this.iframe.title = 'Java runtime';
     this.iframe.setAttribute('aria-hidden', 'true');
     this.iframe.tabIndex = -1;
+    // Phase 5 (S4): opaque origin. No allow-same-origin: the runtime can't reach this page's
+    // DOM, sessionStorage or cookies even if code escaped the WASM sandbox.
+    this.sandboxed = sandboxSupported;
+    if (this.sandboxed) this.iframe.setAttribute('sandbox', 'allow-scripts');
+    this.iframe.allow = 'cross-origin-isolated';
     const url = new URL(opts.runtimeUrl);
     url.searchParams.set('outputCap', String(opts.outputCap));
     this.iframe.src = url.href;
@@ -65,10 +111,25 @@ class RuntimeContext {
   }
 
   private handle(e: MessageEvent) {
-    if (e.source !== this.iframe.contentWindow || e.origin !== location.origin) return;
+    // A sandboxed frame's origin is opaque ("null"); identify it by its window.
+    if (e.source !== this.iframe.contentWindow || e.origin !== (this.sandboxed ? 'null' : location.origin)) return;
     const m = e.data as { type?: unknown; event?: { kind?: unknown } } | null;
     if (!m || m.type !== 'event' || !m.event || typeof m.event.kind !== 'string') return;
     const ev = m.event as RuntimeEvent;
+    if (ev.kind === 'awaiting-assets') {
+      if (this.sandboxed && !ev.isolated) {
+        // This browser can't run the runtime in the sandbox: reload this frame same-origin.
+        sandboxSupported = false;
+        this.sandboxed = false;
+        this.iframe.removeAttribute('sandbox');
+        this.iframe.src = this.iframe.src;
+        return;
+      }
+      loadAssets(this.runtimeUrl).then(
+        (assets) => this.send({ type: 'init', assets }),
+        (err: Error) => { clearTimeout(this.bootTimer); this.rejectReady(new Error('Could not load the Java runtime: ' + err.message)); });
+      return;
+    }
     if (ev.kind === 'ready') {
       clearTimeout(this.bootTimer);
       this.readyAt = performance.now();
@@ -80,7 +141,8 @@ class RuntimeContext {
     this.onEvent(ev);
   }
 
-  send(msg: HostCommand) { this.iframe.contentWindow?.postMessage(msg, location.origin); }
+  // An opaque origin can't be named as targetOrigin; the message goes to this frame's window only.
+  send(msg: HostCommand) { this.iframe.contentWindow?.postMessage(msg, this.sandboxed ? '*' : location.origin); }
 
   destroy() {
     clearTimeout(this.bootTimer);
