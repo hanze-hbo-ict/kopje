@@ -7,7 +7,7 @@
 // Run: node --test tests/host/
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -16,6 +16,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const FIXTURES = join(ROOT, 'tests', 'fixtures');
 let classesDir;
+// JDK 21+ logs Runtime.exit, which the driver's System.exit observer turns into an exit event.
+const hostJdk = Number(/version "(\d+)/.exec(spawnSync('java', ['-version'], { encoding: 'utf8' }).stderr)?.[1]);
 
 before(() => {
   classesDir = mkdtempSync(join(tmpdir(), 'kopje-driver-'));
@@ -135,7 +137,12 @@ test('System.exit(3) ends the single-use JVM with code 3', async () => {
   const r = await compileAndRun('system-exit', 'Main');
   assert.equal(r.stdout, 'exiting\n');
   assert.equal(r.exitCode, 3);
-  assert.equal(exitOf(r.events), undefined, 'host learns the code from process/Module exit, not the control channel');
+  if (hostJdk >= 21) {
+    // As in the WASM runtime (JDK 21), where System.exit never reaches Emscripten's onExit.
+    assert.deepEqual(exitOf(r.events), { t: 'exit', code: 3, via: 'System.exit' });
+  } else {
+    assert.equal(exitOf(r.events), undefined, `JDK ${hostJdk} does not log Runtime.exit; the code comes from the process exit`);
+  }
 });
 
 test('missing main method is a distinct error', async () => {

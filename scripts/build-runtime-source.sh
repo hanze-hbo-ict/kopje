@@ -68,6 +68,13 @@ mkdir -p "$BUILD_DIR"
 want="$(git -C "$ROOT/vendor/javabox" rev-parse HEAD)"
 if [ ! -d "$SRC/.git" ] && [ ! -f "$SRC/.git" ]; then
   cp -Rc "$ROOT/vendor/javabox" "$SRC" 2>/dev/null || cp -R "$ROOT/vendor/javabox" "$SRC"
+  # In a fresh clone (e.g. CI) each submodule's .git is a file with a RELATIVE gitdir, which
+  # is wrong in the copy; point the copy's gitfiles at the original repositories.
+  for p in . $(git -C "$ROOT/vendor/javabox" submodule foreach --recursive --quiet 'echo "$displaypath"'); do
+    if [ -f "$SRC/$p/.git" ]; then
+      echo "gitdir: $(git -C "$ROOT/vendor/javabox/$p" rev-parse --absolute-git-dir)" > "$SRC/$p/.git"
+    fi
+  done
 fi
 have="$(git -C "$SRC" rev-parse HEAD)"
 [ "$have" = "$want" ] || { echo "ERROR: $SRC is at $have, expected pinned $want" >&2; exit 1; }
