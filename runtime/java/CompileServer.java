@@ -15,7 +15,7 @@ import java.util.*;
  *
  * Lifecycle — exactly ONE compile-and-run per JVM:
  *   1. boot, warm up javac, emit {"t":"ready"} on the control channel
- *   2. read ONE line "JAVAEDIT_GO <main.Class>\n" from stdin. Before this line the host
+ *   2. read ONE line "KOPJE_GO <main.Class>\n" from stdin. Before this line the host
  *      never forwards user input, so the line cannot originate from the user.
  *   3. compile every *.java under the source root in one JavaCompiler task (in memory)
  *   4. emit {"t":"compiled",...} with structured diagnostics; stop on failure
@@ -33,13 +33,13 @@ import java.util.*;
  *                   impact is limited to spoofing its own console status (documented).
  *
  * System properties:
- *   javaedit.src      source root (default /work/src)
- *   javaedit.ctl      control channel path (default /dev/jectl)
- *   javaedit.stdin    input file (default /work/stdin); "-" = the process's fd 0 (host tests)
- *   javaedit.poll     "true" (default): wait for input by polling available(), which makes
+ *   kopje.src      source root (default /work/src)
+ *   kopje.ctl      control channel path (default /dev/jectl)
+ *   kopje.stdin    input file (default /work/stdin); "-" = the process's fd 0 (host tests)
+ *   kopje.poll     "true" (default): wait for input by polling available(), which makes
  *                     waiting-for-input observable.
- *   javaedit.warmup   "false" disables the javac warm-up compile.
- *   javaedit.stackKb  stack size of the thread that runs the student's main (default 320).
+ *   kopje.warmup   "false" disables the javac warm-up compile.
+ *   kopje.stackKb  stack size of the thread that runs the student's main (default 320).
  *                     In the browser, HotSpot Zero uses one native WASM call per Java call,
  *                     and the browser's worker stack (~1 MB in Chromium) is far smaller than
  *                     a JVM's. 320 KB makes the JVM throw a normal StackOverflowError (~855
@@ -370,7 +370,7 @@ public class CompileServer {
         }
         emit("{\"t\":\"running\"}");
         main.setAccessible(true);
-        long stackBytes = Long.getLong("javaedit.stackKb", 320L) * 1024;
+        long stackBytes = Long.getLong("kopje.stackKb", 320L) * 1024;
         int[] code = {1};
         Thread runner = new Thread(null, () -> { code[0] = invokeMain(main, mainClass); }, "main", stackBytes);
         runner.setContextClassLoader(loader);
@@ -407,12 +407,12 @@ public class CompileServer {
     // ── main ───────────────────────────────────────────────────────────────────
 
     public static void main(String[] args) throws Exception {
-        String ctlPath = System.getProperty("javaedit.ctl", "/dev/jectl");
+        String ctlPath = System.getProperty("kopje.ctl", "/dev/jectl");
         ctl = new PrintStream(new FileOutputStream(ctlPath), false, StandardCharsets.UTF_8);
-        String srcRoot = System.getProperty("javaedit.src", "/work/src");
-        boolean poll = !"false".equals(System.getProperty("javaedit.poll"));
+        String srcRoot = System.getProperty("kopje.src", "/work/src");
+        boolean poll = !"false".equals(System.getProperty("kopje.poll"));
 
-        String stdinPath = System.getProperty("javaedit.stdin", "/work/stdin");
+        String stdinPath = System.getProperty("kopje.stdin", "/work/stdin");
         FileInputStream rawIn = "-".equals(stdinPath) ? new FileInputStream(FileDescriptor.in) : new FileInputStream(stdinPath);
 
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
@@ -420,15 +420,15 @@ public class CompileServer {
             emit("{\"t\":\"fatal\",\"message\":\"No Java compiler available\"}");
             System.exit(70);
         }
-        if (!"false".equals(System.getProperty("javaedit.warmup"))) warmup(compiler);
+        if (!"false".equals(System.getProperty("kopje.warmup"))) warmup(compiler);
         emit("{\"t\":\"ready\"}");
 
         String go = readControlLine(new ConsoleInput(rawIn, poll, false));
-        if (go == null || !go.startsWith("JAVAEDIT_GO ")) {
+        if (go == null || !go.startsWith("KOPJE_GO ")) {
             emit("{\"t\":\"fatal\",\"message\":" + q("bad control line") + "}");
             System.exit(70);
         }
-        String mainClass = go.substring("JAVAEDIT_GO ".length()).trim();
+        String mainClass = go.substring("KOPJE_GO ".length()).trim();
         if (!mainClass.matches("[\\p{L}_$][\\p{L}\\p{N}_$]*(\\.[\\p{L}_$][\\p{L}\\p{N}_$]*)*")) {
             emit("{\"t\":\"error\",\"kind\":\"bad-main-class\",\"message\":" + q("Invalid main class name: " + mainClass) + "}");
             emit("{\"t\":\"exit\",\"code\":1}");

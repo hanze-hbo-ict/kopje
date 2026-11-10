@@ -10,7 +10,7 @@
     "emcc    emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 5.0.2-git"
   ],
   "files": {
-    "javabox-direct.mjs": "a8356a4c6b59b0c0a51c0a32c705ae15843aaece4d520fe2b4d69564ebc335eb",
+    "javabox-direct.mjs": "987705833c40fc4321f3488c43055c18129fd7f533872608b8eefe9ae770d3a4",
     "javabox-direct.wasm": "bf61d256efb9eae58d07485590ccca750b816fbc920c11eec9be377e11ecbc37",
     "javabox-direct.data": "16f28c9c7b2e07348efac7883aa8bf0aafcc6ad6198230360ebf988cab9a3d9d"
   }

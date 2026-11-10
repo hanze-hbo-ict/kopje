@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import { ISOLATION, SECURITY_HEADERS, headersFile } from './security-headers.mjs';
 
 // S6: the engine test page is built only for e2e runs, never for production.
-const testPages = process.env.JAVAEDIT_TEST_PAGES === '1';
+const testPages = process.env.KOPJE_TEST_PAGES === '1';
 
 const headersFilePlugin = (): Plugin => ({
-  name: 'javaedit-headers-file',
+  name: 'kopje-headers-file',
   apply: 'build',
   writeBundle(options) {
     const dir = options.dir ?? 'dist';

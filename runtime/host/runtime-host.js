@@ -148,7 +148,7 @@ addEventListener('message', (e) => {
       FS.mkdirTree(full.slice(0, full.lastIndexOf('/')));
       FS.writeFile(full, text);
     }
-    enqueueStdin(encoder.encode('JAVAEDIT_GO ' + m.mainClass + '\n'));
+    enqueueStdin(encoder.encode('KOPJE_GO ' + m.mainClass + '\n'));
   } else if (m.type === 'stdin' && started && typeof m.text === 'string') {
     enqueueStdin(encoder.encode(m.text));
   } else if (m.type === 'eof' && started) {
@@ -184,7 +184,7 @@ self.Worker = class PthreadWorker extends NativeWorker {
     if (!String(options.name ?? '').startsWith('em-pthread')) { super(url, options); return; }
     const moduleUrl = String(url);   // the module's Blob URL (mainScriptUrlOrBlob below)
     const bootstrap = `let chain = Promise.resolve(), handle = null; const queued = [];
-const fix = async (e) => { const d = e.data; if (d && d.javaeditWasmBytes) { d.wasmModule = await WebAssembly.compile(d.javaeditWasmBytes); delete d.javaeditWasmBytes; } return e; };
+const fix = async (e) => { const d = e.data; if (d && d.kopjeWasmBytes) { d.wasmModule = await WebAssembly.compile(d.kopjeWasmBytes); delete d.kopjeWasmBytes; } return e; };
 self.onmessage = (e) => { chain = chain.then(() => fix(e)).then((ev) => handle ? handle(ev) : queued.push(ev)); };
 import(${JSON.stringify(moduleUrl)}).then(() => {
   const emscripten = self.onmessage === null ? null : self.onmessage;
@@ -201,7 +201,7 @@ import(${JSON.stringify(moduleUrl)}).then(() => {
     } catch (err) {
       if (err?.name !== 'DataCloneError' || !(message?.wasmModule instanceof WebAssembly.Module) || !wasmBytesForWorkers) throw err;
       const { wasmModule, ...rest } = message;
-      super.postMessage({ ...rest, javaeditWasmBytes: wasmBytesForWorkers }, transfer);
+      super.postMessage({ ...rest, kopjeWasmBytes: wasmBytesForWorkers }, transfer);
     }
   }
 };
@@ -237,8 +237,8 @@ async function boot(assets) {
     // over upstream's CompileServer in /opt/javabox, which works for both binaries.
     // The driver's property defaults already equal these values.
     arguments: [
-      '-Djavaedit.src=/work/src',
-      '-Djavaedit.ctl=/dev/jectl',
+      '-Dkopje.src=/work/src',
+      '-Dkopje.ctl=/dev/jectl',
     ],
     preRun: [(M) => {
       const FS = M.FS;
@@ -253,7 +253,7 @@ async function boot(assets) {
       // has populated the filesystem; main() is held back with a run dependency until then.
       // Kopje's runtime build preloads only /opt/jdk; the upstream prebuilt also ships
       // /opt/javabox (its own CompileServer and Doom), which is removed first.
-      M.addRunDependency('javaedit-driver');
+      M.addRunDependency('kopje-driver');
       const install = () => {
         if (!FS.analyzePath('/opt/jdk/lib/modules').exists) { setTimeout(install, 2); return; }
         FS.mkdirTree('/opt/javabox');
@@ -261,7 +261,7 @@ async function boot(assets) {
           if (name.startsWith('CompileServer') || /^(doom\.jar|freedoom1\.wad|doom\.cfg)$/.test(name)) FS.unlink('/opt/javabox/' + name);
         }
         for (const [name, bytes] of driverFiles) FS.writeFile('/opt/javabox/' + name, bytes);
-        M.removeRunDependency('javaedit-driver');
+        M.removeRunDependency('kopje-driver');
       };
       install();
     }],

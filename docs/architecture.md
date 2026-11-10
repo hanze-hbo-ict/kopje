@@ -25,7 +25,7 @@ unbundled into the content-versioned `public/runtime/<hash>/`), `src/runtime/` (
 `-Djava.class.path=/opt/Kopje` via `Module.arguments`. **Testing showed the prebuilt
 ignores `Module.arguments`**, so the runtime host instead:
 
-1. calls `addRunDependency('javaedit-driver')` in `preRun`, which holds back `main()`;
+1. calls `addRunDependency('kopje-driver')` in `preRun`, which holds back `main()`;
 2. waits until the preload package has created `/opt/javabox/CompileServer.class`;
 3. unlinks upstream's `CompileServer*.class` and the Doom files, then writes our driver
    classes there;
@@ -52,7 +52,7 @@ destroyed.
 
 ## ADR-3 — Channels: control and student input are physically separate (revised)
 
-- **Host → Java control:** exactly one line, `JAVAEDIT_GO <main.Class>\n`, sent before any
+- **Host → Java control:** exactly one line, `KOPJE_GO <main.Class>\n`, sent before any
   user input is forwarded. Sources travel through MEMFS (`/work/src/**`), not stdin. After
   the GO line every input byte belongs to the program, so user input can't be parsed as a
   command (host test: `student input cannot be parsed as a control command`).
@@ -119,7 +119,7 @@ run. On JDK 17 (host tests) the handler never fires and the process simply exits
 | D5 | Use JavaBox's SAB/Atomics stdin bridge | MEMFS append-file input channel | Prebuilt `available()` on fd 0 is broken and the ring has a lost-wakeup race; the file channel is observable and race-free. A source build could restore the ring once those are fixed. |
 | D6 | `System.exit` handled by the runtime | Observed through JDK 21 Runtime.exit logging | `onExit` never fires for `System.exit` in the prebuilt. |
 | D7 | Trim modules in upstream `build-jdk-modules.sh` | Our own jlink step in `scripts/build-runtime-source.sh`; upstream scripts otherwise unchanged | Avoids forking JavaBox; also pins the jlink JDK to 21.0.10 to match HotSpot. |
-| D8 | Build in the repo | Build in a space-free copy (`~/javaedit-build`) | libtool/OpenJDK configure fail on the project path, which contains spaces. |
+| D8 | Build in the repo | Build in a space-free copy (`~/kopje-build`) | libtool/OpenJDK configure fail on the project path, which contains spaces. |
 | D9 | Runtime iframe hosted on a separate origin | Opaque-origin sandbox on the same host (ADR-10); same-origin fallback on WebKit | No second origin to whitelist; WebKit can't isolate sandboxed frames. |
 | D4 | Fork of JavaBox | Pinned upstream submodule, driver replaced at runtime | No fork needed yet; native changes (futex fix, socket denial, Doom removal) would require one in Phase 3. |
 

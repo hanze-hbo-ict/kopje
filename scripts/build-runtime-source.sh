@@ -16,7 +16,7 @@
 #   5. OUR link step with runtime/native/jvm-main.c and runtime/native/no-sockets.js
 #      (replaces upstream link-direct-wasm.sh; PLAN.md N1)
 #
-# Output: $JAVAEDIT_BUILD_DIR/out-<modules>/javabox-direct.{mjs,wasm,data}
+# Output: $KOPJE_BUILD_DIR/out-<modules>/javabox-direct.{mjs,wasm,data}
 # Then:   RUNTIME_DIR=<that dir> npm run prepare:runtime
 set -euo pipefail
 
@@ -31,8 +31,8 @@ while [ $# -gt 0 ]; do
 done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BUILD_DIR="${JAVAEDIT_BUILD_DIR:-$HOME/javaedit-build}"
-case "$BUILD_DIR" in *" "*) echo "JAVAEDIT_BUILD_DIR must not contain spaces: $BUILD_DIR" >&2; exit 1 ;; esac
+BUILD_DIR="${KOPJE_BUILD_DIR:-$HOME/kopje-build}"
+case "$BUILD_DIR" in *" "*) echo "KOPJE_BUILD_DIR must not contain spaces: $BUILD_DIR" >&2; exit 1 ;; esac
 SRC="$BUILD_DIR/javabox"
 OUT="$BUILD_DIR/out-$MODULE_SET"
 
@@ -81,7 +81,7 @@ fi
 # 4. Class library.
 rm -rf build/jdk-wasm
 jlink --add-modules "$MODULES" --output build/jdk-wasm \
-  --strip-debug --no-man-pages --no-header-files --compress="${JAVAEDIT_JLINK_COMPRESS:-zip-0}"
+  --strip-debug --no-man-pages --no-header-files --compress="${KOPJE_JLINK_COMPRESS:-zip-0}"
 # E5: uncompressed jimage (zip-0) gzips to 10.3 MB on the wire vs 14.5 MB for zip-6; boot time
 # is unchanged; MEMFS then holds ~35 MB instead of ~16 MB per runtime (docs/baseline.md).
 rm -f build/jdk-wasm/lib/ct.sym                                   # only needed for javac --release
@@ -93,8 +93,8 @@ rm -f build/jdk-wasm/lib/jspawnhelper build/jdk-wasm/lib/shaders.metallib
 rm -f build/jdk-wasm/patch/UnixConstants.java.generated
 # Empty placeholders: System.loadLibrary must "find" the statically linked natives.
 for lib in libjava libzip libnet libnio libjimage; do touch "build/jdk-wasm/lib/$lib.so"; done
-"$J/bin/java" -version 2>&1 | head -1 > build/jdk-wasm/JAVAEDIT_JLINK_JDK
-echo "modules: $MODULES" >> build/jdk-wasm/JAVAEDIT_JLINK_JDK
+"$J/bin/java" -version 2>&1 | head -1 > build/jdk-wasm/KOPJE_JLINK_JDK
+echo "modules: $MODULES" >> build/jdk-wasm/KOPJE_JLINK_JDK
 
 # 5. Link with OUR entry point and link command (PLAN.md N1) instead of upstream
 #    link-direct-wasm.sh: runtime/native/jvm-main.c (no Doom/audio/AWT natives, no
@@ -102,14 +102,14 @@ echo "modules: $MODULES" >> build/jdk-wasm/JAVAEDIT_JLINK_JDK
 #    runtime/native/no-sockets.js (socket syscalls fail; S3). Flags otherwise follow
 #    upstream's link script; diff both on every JavaBox bump.
 # E6: measured in docs/baseline.md; the heap grows to the JVM's reservations anyway.
-INITIAL_MEMORY_MB="${JAVAEDIT_INITIAL_MEMORY_MB:-128}"
-PTHREAD_POOL="${JAVAEDIT_PTHREAD_POOL:-8}"
+INITIAL_MEMORY_MB="${KOPJE_INITIAL_MEMORY_MB:-128}"
+PTHREAD_POOL="${KOPJE_PTHREAD_POOL:-8}"
 LIBJVM="openjdk/build/emscripten-zero/jdk/lib/zero/libjvm.a"
 NATIVE_LIBS=(build/jdk-native-wasm/libjava.a build/jdk-native-wasm/libjimage.a build/jdk-native-wasm/libzip.a build/jdk-native-wasm/libnio.a)
 LIBFFI="third-party/libffi-emscripten/install/lib/libffi.a"
 for f in "$LIBJVM" "${NATIVE_LIBS[@]}" "$LIBFFI"; do [ -f "$f" ] || { echo "ERROR: missing $f (run without --skip-native)" >&2; exit 1; }; done
 
-LINK_DIR="build/javaedit-link"
+LINK_DIR="build/kopje-link"
 rm -rf "$LINK_DIR" && mkdir -p "$LINK_DIR"
 emcc -c -O3 -pthread \
   -I openjdk/src/hotspot/share/include/ -I openjdk/src/hotspot/os/posix/include/ \
@@ -157,7 +157,7 @@ fi
 if grep -q 'WebSocket' "$OUT/javabox-direct.mjs"; then
   echo "ERROR: socket backend (SOCKFS/WebSocket) still linked" >&2; exit 1
 fi
-cp build/jdk-wasm/JAVAEDIT_JLINK_JDK "$OUT/BUILD_INFO"
+cp build/jdk-wasm/KOPJE_JLINK_JDK "$OUT/BUILD_INFO"
 echo "link: own jvm-main.c + no-sockets.js; INITIAL_MEMORY=${INITIAL_MEMORY_MB}MB PTHREAD_POOL_SIZE=${PTHREAD_POOL}" >> "$OUT/BUILD_INFO"
 {
   echo "javabox $(git rev-parse HEAD)"

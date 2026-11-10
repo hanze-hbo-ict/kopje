@@ -18,19 +18,19 @@ const FIXTURES = join(ROOT, 'tests', 'fixtures');
 let classesDir;
 
 before(() => {
-  classesDir = mkdtempSync(join(tmpdir(), 'javaedit-driver-'));
+  classesDir = mkdtempSync(join(tmpdir(), 'kopje-driver-'));
   execFileSync('javac', ['--release', '17', '-d', classesDir, join(ROOT, 'runtime/java/CompileServer.java')]);
 });
 
 /** Start one single-use driver JVM against a source directory. */
 function startDriver(srcDir, { poll = true } = {}) {
-  const work = mkdtempSync(join(tmpdir(), 'javaedit-run-'));
+  const work = mkdtempSync(join(tmpdir(), 'kopje-run-'));
   const ctlPath = join(work, 'ctl.jsonl');
   writeFileSync(ctlPath, '');
   const child = spawn('java', [
     '-cp', classesDir,
-    `-Djavaedit.src=${srcDir}`, `-Djavaedit.ctl=${ctlPath}`,
-    `-Djavaedit.poll=${poll}`, '-Djavaedit.warmup=false', '-Djavaedit.stdin=-',
+    `-Dkopje.src=${srcDir}`, `-Dkopje.ctl=${ctlPath}`,
+    `-Dkopje.poll=${poll}`, '-Dkopje.warmup=false', '-Dkopje.stdin=-',
     'CompileServer',
   ], { stdio: ['pipe', 'pipe', 'pipe'] });
   const state = { stdout: '', stderr: '', exitCode: undefined };
@@ -46,7 +46,7 @@ function startDriver(srcDir, { poll = true } = {}) {
       await new Promise((r) => setTimeout(r, 25));
     }
   };
-  const go = (mainClass) => child.stdin.write(`JAVAEDIT_GO ${mainClass}\n`);
+  const go = (mainClass) => child.stdin.write(`KOPJE_GO ${mainClass}\n`);
   return { child, state, exited, events, waitFor, go };
 }
 
@@ -89,7 +89,7 @@ test('syntax error in second file reports that file and line', async () => {
 });
 
 test('edit second file then rerun: fresh classes, no stale bytecode', async () => {
-  const src = mkdtempSync(join(tmpdir(), 'javaedit-edit-'));
+  const src = mkdtempSync(join(tmpdir(), 'kopje-edit-'));
   cpSync(join(FIXTURES, 'package-two-file'), src, { recursive: true });
   const run = async () => {
     const d = startDriver(src);
@@ -150,12 +150,12 @@ test('wrong main class name is a distinct error', async () => {
 
 test('student input cannot be parsed as a control command', async () => {
   // Input sent *after* GO, even if it looks like a command, reaches the program verbatim.
-  const r = await compileAndRun('interactive', 'Main', 'JAVAEDIT_GO evil.Main\nJBOX_PING\n\x04');
-  assert.equal(r.stdout, 'Name? Age? Hello JAVAEDIT_GO evil.Main (JBOX_PING)\nEOF\n');
+  const r = await compileAndRun('interactive', 'Main', 'KOPJE_GO evil.Main\nJBOX_PING\n\x04');
+  assert.equal(r.stdout, 'Name? Age? Hello KOPJE_GO evil.Main (JBOX_PING)\nEOF\n');
 });
 
 test('student classes cannot resolve the driver class by name', async () => {
-  const src = mkdtempSync(join(tmpdir(), 'javaedit-iso-'));
+  const src = mkdtempSync(join(tmpdir(), 'kopje-iso-'));
   writeFileSync(join(src, 'Main.java'), `public class Main { public static void main(String[] a) {
     try { Class.forName("CompileServer"); System.out.println("visible"); }
     catch (ClassNotFoundException e) { System.out.println("hidden"); } } }`);

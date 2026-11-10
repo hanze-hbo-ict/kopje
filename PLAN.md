@@ -411,7 +411,7 @@ Exams run on Edge, which gets the full sandbox; Safari is the owner's developmen
 Not verified in real Safari, and JavaBox itself was not run in the second-origin setup.
 
 **Design if built.** Extend the existing fallback: sandbox first; if the frame reports it isn't
-isolated *and* `JAVAEDIT_RUNTIME_ORIGIN` is configured, reload it as a cross-origin iframe on
+isolated *and* `KOPJE_RUNTIME_ORIGIN` is configured, reload it as a cross-origin iframe on
 that origin (optionally `sandbox="allow-scripts allow-same-origin"`, which keeps that origin
 but blocks popups, forms and top navigation); otherwise today's same-origin fallback.
 Engine messages use that exact origin. The runtime origin's `frame-ancestors` names the IDE

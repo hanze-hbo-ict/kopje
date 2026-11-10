@@ -10,7 +10,7 @@
 // cached for a year. The path is written to src/runtime/runtime-location.generated.ts and
 // ends up inside the hashed app bundle; only index.html is revalidated.
 //
-// RUNTIME_DIR defaults to ~/javaedit-build/out-minimal (source build, docs/runtime-build.md),
+// RUNTIME_DIR defaults to ~/kopje-build/out-minimal (source build, docs/runtime-build.md),
 // falling back to runtime-prebuilt/ (upstream demo artifacts; contains Doom, dev only).
 import { execFileSync } from 'node:child_process';
 import { chmodSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync, renameSync } from 'node:fs';
@@ -24,14 +24,14 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_ROOT = join(ROOT, 'public', 'runtime');
 const GENERATED = join(ROOT, 'src', 'runtime', 'runtime-location.generated.ts');
 const FILES = ['javabox-direct.mjs', 'javabox-direct.wasm', 'javabox-direct.data'];
-const candidates = [process.env.RUNTIME_DIR, join(homedir(), 'javaedit-build', 'out-minimal'), join(ROOT, 'runtime-prebuilt')].filter(Boolean);
+const candidates = [process.env.RUNTIME_DIR, join(homedir(), 'kopje-build', 'out-minimal'), join(ROOT, 'runtime-prebuilt')].filter(Boolean);
 const runtimeDir = candidates.map((d) => resolve(d)).find((d) => FILES.every((f) => existsSync(join(d, f))));
 if (!runtimeDir) {
   console.error(`No JavaBox runtime found in:\n  ${candidates.join('\n  ')}\nSee docs/runtime-build.md.`);
   process.exit(1);
 }
 
-const stage = mkdtempSync(join(tmpdir(), 'javaedit-runtime-'));
+const stage = mkdtempSync(join(tmpdir(), 'kopje-runtime-'));
 cpSync(join(ROOT, 'runtime', 'host'), join(stage, 'host'), { recursive: true });
 
 const driver = join(stage, 'driver');
