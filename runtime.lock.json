@@ -1,0 +1,17 @@
+{
+  "note": "SHA-256 of the deployed runtime; update with `node scripts/verify.mjs dist --lock` after a deliberate runtime change",
+  "build": [
+    "openjdk version \"21.0.10\" 2026-01-20 LTS",
+    "modules: java.base,jdk.compiler,java.logging",
+    "link: own jvm-main.c + no-sockets.js; INITIAL_MEMORY=128MB PTHREAD_POOL_SIZE=8",
+    "javabox 506756b78cacedc23026fb4445e4cb57e11048b1",
+    "openjdk e339656cdd1c9e09aaf1c4ca9a87c399e3df56a7",
+    "libffi  0b72a27b7cd647eb31f15144dcfeacde864de9f1",
+    "emcc    emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 5.0.2-git"
+  ],
+  "files": {
+    "javabox-direct.mjs": "a8356a4c6b59b0c0a51c0a32c705ae15843aaece4d520fe2b4d69564ebc335eb",
+    "javabox-direct.wasm": "bf61d256efb9eae58d07485590ccca750b816fbc920c11eec9be377e11ecbc37",
+    "javabox-direct.data": "16f28c9c7b2e07348efac7883aa8bf0aafcc6ad6198230360ebf988cab9a3d9d"
+  }
+}

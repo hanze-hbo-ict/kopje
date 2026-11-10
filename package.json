@@ -15,10 +15,12 @@
     "test": "npm run test:unit && npm run test:host",
     "test:e2e": "npm run build:test && playwright test",
     "build:test": "JAVAEDIT_TEST_PAGES=1 npm run build",
-    "test:diag": "npm run build:test && DIAG=1 playwright test -diag"
+    "test:diag": "npm run build:test && DIAG=1 playwright test -diag",
+    "verify": "node scripts/verify.mjs",
+    "verify:dist": "node scripts/verify.mjs dist"
   },
   "devDependencies": {
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "1.65.0",
     "@types/node": "26.6.6",
     "typescript": "7.0.2",
     "vite": "8.3.5"

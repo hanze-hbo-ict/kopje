@@ -16,6 +16,7 @@ See `PLAN.md` for scope and `docs/` for design and evidence:
 | `docs/runtime-build.md` | reproducible source build of the runtime |
 | `docs/klode-ui-reference.md` | UI reference and Java adaptations |
 | `docs/licensing.md` | licence audit and distribution plan |
+| `docs/deployment.md` | hosting requirements, build + verify, post-deploy checks |
 
 ## Quick start
 
@@ -24,6 +25,7 @@ git submodule update --init --recursive
 npm install
 scripts/build-runtime-source.sh --modules minimal   # ~4 min; needs emcc, autotools, GNU grep
 npm run build                                       # -> dist/
+npm run verify:dist                                 # pins, headers, runtime checksums
 npm run serve                                       # http://127.0.0.1:5391/
 ```
 
