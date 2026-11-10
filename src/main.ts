@@ -3,6 +3,7 @@ import { JavaEditor } from './editor/JavaEditor.ts';
 import { JavaConsole } from './console/JavaConsole.ts';
 import { FileExplorer } from './ui/FileExplorer.ts';
 import { createTheme } from './ui/theme.ts';
+import { Transfer } from './ui/Transfer.ts';
 import { ProjectManager } from './project/ProjectManager.ts';
 import { SessionStore } from './project/SessionStorage.ts';
 import { templateProject, type UiState } from './project/model.ts';
@@ -185,6 +186,34 @@ project.onChange((c) => {
   if (c.type === 'content') { save(); return; }
   if (c.type === 'files' || c.type === 'main') renderMainSelect();
   save(true);
+});
+
+// ── copy / paste / new project (E1, E2, E4) ──────────────────────────────────
+function reopenProject() {
+  editor.forgetAll();
+  renderMainSelect();
+  editor.open(project.activeFile, project.source(project.activeFile));
+  $('filename-text').textContent = project.activeFile;
+  explorer.render();
+}
+new Transfer(project, {
+  locked: busy,
+  say: (text) => { $('file-message').textContent = text; },
+  confirm: (m) => window.confirm(m),
+  afterReplace: reopenProject,
+  newProject: () => {
+    project.reset();
+    store.clear();          // nothing of the previous project stays in this tab's storage
+    reopenProject();
+    consoleView.clear();
+  },
+});
+// Closing the tab loses the project (sessionStorage only survives reloads).
+addEventListener('beforeunload', (e) => {
+  if (!project.isModified()) return;
+  store.flush();
+  e.preventDefault();
+  e.returnValue = '';
 });
 
 // ── theme ──────────────────────────────────────────────────────────────────────

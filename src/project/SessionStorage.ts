@@ -59,6 +59,13 @@ export class SessionStore {
     else this.timer = setTimeout(() => this.flush(), 400);
   }
 
+  /** Remove the stored session (New project). */
+  clear() {
+    clearTimeout(this.timer);
+    this.pending = null;
+    try { this.storage?.removeItem(KEY); } catch { /* ignore */ }
+  }
+
   flush() {
     clearTimeout(this.timer);
     const data = this.pending;

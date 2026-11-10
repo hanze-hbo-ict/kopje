@@ -36,6 +36,12 @@
               <button id="file-delete" class="icon-button" type="button" aria-label="Delete current file" title="Delete current file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
             </div>
             <ul id="file-list" aria-labelledby="files-title"></ul>
+            <div class="files-actions" role="group" aria-label="Copy and paste">
+              <button id="copy-file" type="button" class="text-button" title="Copy the current file (for pasting into an exam answer)">Copy file</button>
+              <button id="copy-all" type="button" class="text-button" title="Copy all files as one text, each with a // File: header">Copy all</button>
+              <button id="paste-project" type="button" class="text-button" title="Paste files copied with Copy all, or a single class">Paste…</button>
+              <button id="new-project" type="button" class="text-button" title="Start over with the example project">New</button>
+            </div>
             <p id="file-message" class="files-message" aria-live="polite"></p>
           </nav>
           <div id="editor"></div>
@@ -53,6 +59,17 @@
     </div>
     <p class="workspace-motto">A few files. One idea at a time.</p>
   </main>
+  <dialog id="transfer" aria-labelledby="transfer-title" aria-describedby="transfer-help">
+    <h2 id="transfer-title">Paste project</h2>
+    <p id="transfer-help" class="transfer-help"></p>
+    <textarea id="transfer-text" spellcheck="false" autocomplete="off" aria-labelledby="transfer-title"></textarea>
+    <p id="transfer-message" class="transfer-message" role="alert"></p>
+    <div class="transfer-actions">
+      <button id="transfer-replace" type="button" class="primary">Replace project</button>
+      <button id="transfer-add" type="button">Add to project</button>
+      <button id="transfer-close" type="button">Cancel</button>
+    </div>
+  </dialog>
   <footer class="app-footer">
     <span>No code completion or AI assistance</span>
     <span>Runs entirely in your browser; files are kept only in this tab</span>

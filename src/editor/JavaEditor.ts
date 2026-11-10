@@ -104,6 +104,9 @@ export class JavaEditor {
 
   forget(path: string) { this.states.delete(path); }
 
+  /** Drop every cached file state (after the project was replaced wholesale). */
+  forgetAll() { this.states.clear(); this.current = ''; }
+
   get path() { return this.current; }
   focus() { this.view.focus(); }
 

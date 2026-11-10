@@ -83,3 +83,28 @@ test('session store without storage works in memory', () => {
   assert.equal(s.persistent, false);
   s.save(templateProject(), { theme: 'light' }, true);
 });
+
+test('replaceAll, addFiles, reset, isModified', () => {
+  const pm = new ProjectManager(templateProject());
+  assert.equal(pm.isModified(), false);
+  pm.replaceAll({ 'q/Helper.java': 'package q; class Helper {}', 'q/App.java': 'package q; public class App { public static void main(String[] a) {} }' });
+  assert.deepEqual(pm.paths, ['q/App.java', 'q/Helper.java']);
+  assert.equal(pm.mainClass, 'q.App');
+  assert.equal(pm.activeFile, 'q/App.java');
+  assert.equal(pm.isModified(), true);
+  assert.deepEqual(pm.addFiles({ 'q/Helper.java': 'package q; class Helper { int x; }', 'q/New.java': '' }), ['q/Helper.java']);
+  assert.equal(pm.source('q/Helper.java'), 'package q; class Helper { int x; }');
+  assert.throws(() => pm.addFiles({ '../x.java': '' }));
+  assert.throws(() => pm.replaceAll({}), /empty/);
+  pm.reset();
+  assert.equal(pm.isModified(), false);
+  assert.equal(pm.mainClass, 'example.Main');
+});
+
+test('session store clear removes stored state', () => {
+  const storage = new MemoryStorage();
+  const s = new SessionStore(storage);
+  s.save(templateProject(), { theme: 'dark' }, true);
+  s.clear();
+  assert.equal(new SessionStore(storage).load(), null);
+});

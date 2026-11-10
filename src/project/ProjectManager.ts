@@ -1,5 +1,5 @@
-import { normalizePath, pathToClassName, classNameToPath, LIMITS } from './paths.ts';
-import { looksLikeMain, newFileSource, type JavaProject } from './model.ts';
+import { normalizePath, pathToClassName, classNameToPath, validateFiles, LIMITS } from './paths.ts';
+import { looksLikeMain, newFileSource, templateProject, type JavaProject } from './model.ts';
 
 export type ProjectChange =
   | { type: 'content'; path: string }
@@ -100,5 +100,43 @@ export class ProjectManager {
     if (this.project.activeFile === path) this.project.activeFile = this.paths[0];
     if (this.project.mainClass === pathToClassName(path)) this.project.mainClass = this.defaultMain();
     this.emit({ type: 'files' });
+  }
+
+  /** Replace every file (paste project). Picks a main class that exists, preferring one with main(). */
+  replaceAll(files: Record<string, string>) {
+    const valid = validateFiles(files);
+    const paths = Object.keys(valid);
+    if (!paths.length) throw new Error('The project would be empty');
+    this.project.files = { ...valid };
+    this.project.activeFile = this.paths[0];
+    this.project.mainClass = this.defaultMain();
+    const main = classNameToPath(this.project.mainClass);
+    if (main in this.project.files) this.project.activeFile = main;
+    this.emit({ type: 'files' });
+  }
+
+  /** Add or overwrite files (paste into project). Returns the paths that were overwritten. */
+  addFiles(files: Record<string, string>): string[] {
+    const merged = validateFiles({ ...this.project.files, ...files });
+    const overwritten = Object.keys(files).filter((p) => p in this.project.files);
+    this.project.files = { ...merged };
+    this.project.activeFile = Object.keys(files).sort()[0] ?? this.project.activeFile;
+    if (!this.project.mainClass || !(classNameToPath(this.project.mainClass) in this.project.files)) this.project.mainClass = this.defaultMain();
+    this.emit({ type: 'files' });
+    return overwritten;
+  }
+
+  /** Back to the starter template (New project). */
+  reset() {
+    const t = templateProject();
+    this.project = { files: { ...t.files }, mainClass: t.mainClass, activeFile: t.activeFile };
+    this.emit({ type: 'files' });
+  }
+
+  /** True when the files differ from the starter template (used for the unload warning). */
+  isModified(): boolean {
+    const t = templateProject().files;
+    const a = Object.keys(this.project.files), b = Object.keys(t);
+    return a.length !== b.length || a.some((p) => this.project.files[p] !== t[p]);
   }
 }

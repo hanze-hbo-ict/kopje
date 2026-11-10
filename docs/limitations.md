@@ -44,13 +44,23 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
 - **Rename is not a refactoring:** renaming `A.java` does not change `class A` or package
   declarations; javac reports the mismatch.
 
+## Copy and paste
+
+- **Copy all / Paste** use a plain-text bundle: each file is preceded by a line
+  `// File: <path>`. A source line that is exactly `// File: <path>` is read as a new file
+  on paste. Pasting a single class without headers derives its path from `package` and the
+  first top-level type.
+- If the browser refuses the Clipboard API, the text is shown selected for Ctrl+C.
+
 ## Storage and privacy
 
 - Files and UI state live in **`sessionStorage`** of the tab. Browsers may restore it when a
   closed tab or a whole session is restored; a duplicated tab starts with a copy;
   `sessionStorage` is not a secure-deletion mechanism. Compiled classes and console
   output are never stored. If storage fails (quota, disabled), the IDE keeps working in
-  memory and shows a warning in the footer.
+  memory and shows a warning in the footer. **New** resets to the template and removes the
+  stored session. Closing or leaving the tab with a changed project shows the browser's
+  "leave page?" warning (also on reload, which the browser can't tell apart).
 
 ## Browsers
 
