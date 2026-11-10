@@ -264,19 +264,25 @@ Record measured cold start, repeat-run latency, JS heap/WASM memory, total asset
 
 ## 10. Delivery checklist
 
-- [ ] Working JavaBox fork with upstream commit pinned.
-- [ ] Repeatable source build and local static server with required headers.
-- [ ] Multi-file compiler and structured diagnostics.
-- [ ] Interactive console (stdin, stdout, stderr) and reliable Stop.
-- [ ] Trimmed JDK build and documented capability restrictions.
-- [ ] Minimal IDE: CodeMirror, file operations, main-class selection, console.
-- [ ] Klode-inspired UI with a documented visual/interaction reference and Java-specific adaptations.
-- [ ] `sessionStorage` reload behavior with no intentional permanent storage.
-- [ ] Automated browser and adversarial-behavior tests.
-- [ ] Baseline versus trimmed-runtime benchmarks.
-- [ ] `README.md` for development, build and deployment.
-- [ ] `docs/architecture.md`, `docs/capability-matrix.md`, `docs/licensing.md` and `docs/limitations.md`.
-- [ ] Security review findings S1–S9 (§13) mitigated or explicitly accepted, each with its verifying test.
+Status 2026-11-10: all items done. Evidence in brackets.
+
+- [x] ~~Working JavaBox fork~~ Upstream pinned as a submodule (`506756b`), **no fork** by decision; our own `jvm-main.c` and link step replace upstream's at build time (§14 N1). [`vendor/javabox`, `runtime/native/`]
+- [x] Repeatable source build and local static server with required headers. [`scripts/build-runtime-source.sh`, `docs/runtime-build.md`, `scripts/serve.mjs`, `security-headers.mjs`]
+- [x] Multi-file compiler and structured diagnostics. [`runtime/java/CompileServer.java`, `tests/host/`, `ide.spec`]
+- [x] Interactive console (stdin, stdout, stderr) and reliable Stop. [`slice.spec`, `ide.spec`, `correctness.spec`]
+- [x] Trimmed JDK build and documented capability restrictions. [`java.base,jdk.compiler,java.logging`; `docs/capability-matrix.md`, `capabilities.spec`]
+- [x] Minimal IDE: CodeMirror, file operations, main-class selection, console. [`src/`, `ide.spec`, `transfer.spec`]
+- [x] Klode-inspired UI with a documented visual/interaction reference and Java-specific adaptations. [`docs/klode-ui-reference.md`, `docs/screenshots/`]
+- [x] `sessionStorage` reload behavior with no intentional permanent storage. [`src/project/SessionStorage.ts`, `ide.spec`, `transfer.spec` E4]
+- [x] Automated browser and adversarial-behavior tests. [`tests/e2e/` in Chromium, Firefox, WebKit: 104 passed, 10 skipped (browser-specific); `security`, `spoofing`, `isolation`, `capabilities`]
+- [x] Baseline versus trimmed-runtime benchmarks. [`docs/baseline.md`: sizes, boot, compile+run, memory, caching]
+- [x] `README.md` for development, build and deployment. [`README.md`, `docs/deployment.md`]
+- [x] `docs/architecture.md`, `docs/capability-matrix.md`, `docs/licensing.md` and `docs/limitations.md`.
+- [x] Security review findings S1–S9 (§13) mitigated or explicitly accepted, each with its verifying test. [S1/S4 `security.spec` + `isolation.spec`; S2/S7 `security.spec`; S3 build check + `capabilities.spec`; S5 `docs/deployment.md`; S6/S8 `scripts/verify.mjs`; S9 `spoofing.spec`, residual spoofing of a program's own status accepted in `docs/limitations.md`]
+
+Known limitations that remain (see `docs/limitations.md`): recursion depth ~700 nested calls;
+Safari/WebKit runs the runtime same-origin (no sandbox); `Files.getFileStore` /
+`probeContentType` unsupported; real Edge and the exam laptop not yet tested (owner).
 
 ## 11. Working conventions for the coding agent
 
