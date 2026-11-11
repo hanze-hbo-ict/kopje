@@ -84,7 +84,8 @@ class RuntimeContext {
   private resolveReady!: () => void;
   private rejectReady!: (e: Error) => void;
   private readyAt = 0;
-  private readonly bootTimer: ReturnType<typeof setTimeout>;
+  private bootTimer: ReturnType<typeof setTimeout>;
+  private readonly bootTimeoutMs: number;
   private readonly listener = (e: MessageEvent) => this.handle(e);
   private readonly runtimeUrl: string;
   private sandboxed: boolean;
@@ -108,7 +109,8 @@ class RuntimeContext {
     url.searchParams.set('outputCap', String(opts.outputCap));
     this.iframe.src = url.href;
     addEventListener('message', this.listener);
-    this.bootTimer = setTimeout(() => this.rejectReady(new Error('The Java runtime did not start in time.')), opts.bootTimeoutMs);
+    this.bootTimeoutMs = opts.bootTimeoutMs;
+    this.bootTimer = this.startBootTimer();
     document.body.appendChild(this.iframe);
   }
 
@@ -119,14 +121,7 @@ class RuntimeContext {
     if (!m || m.type !== 'event' || !m.event || typeof m.event.kind !== 'string') return;
     const ev = m.event as RuntimeEvent;
     if (ev.kind === 'awaiting-assets') {
-      if (this.sandboxed && !ev.isolated) {
-        // This browser can't run the runtime in the sandbox: reload this frame same-origin.
-        sandboxSupported = false;
-        this.sandboxed = false;
-        this.iframe.removeAttribute('sandbox');
-        this.iframe.src = this.iframe.src;
-        return;
-      }
+      if (this.sandboxed && !ev.isolated) { this.unsandbox(); return; }
       loadAssets(this.runtimeUrl).then(
         (assets) => this.send({ type: 'init', assets }),
         (err: Error) => { clearTimeout(this.bootTimer); this.rejectReady(new Error('Could not load the Java runtime: ' + err.message)); });
@@ -137,10 +132,27 @@ class RuntimeContext {
       this.readyAt = performance.now();
       this.resolveReady();
     } else if (ev.kind === 'error' && !this.readyAt) {
+      // Safety net for a sandbox that passed the probe but can't start the threads after all.
+      if (this.sandboxed && ev.errorKind === 'worker') { this.unsandbox(); return; }
       clearTimeout(this.bootTimer);
       this.rejectReady(new Error(ev.message));
     }
     this.onEvent(ev);
+  }
+
+  private startBootTimer() {
+    return setTimeout(() => this.rejectReady(new Error('The Java runtime did not start in time.')), this.bootTimeoutMs);
+  }
+
+  /** This browser can't run the runtime in the sandbox (WebKit): reload this frame same-origin,
+   *  for the rest of the session, with a fresh boot timeout. */
+  private unsandbox() {
+    sandboxSupported = false;
+    this.sandboxed = false;
+    this.iframe.removeAttribute('sandbox');
+    this.iframe.src = this.iframe.src;
+    clearTimeout(this.bootTimer);
+    this.bootTimer = this.startBootTimer();
   }
 
   // An opaque origin can't be named as targetOrigin; the message goes to this frame's window only.

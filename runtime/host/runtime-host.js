@@ -193,6 +193,8 @@ import(${JSON.stringify(moduleUrl)}).then(() => {
 }, (err) => setTimeout(() => { throw err; }));`;
     const blob = URL.createObjectURL(new Blob([bootstrap], { type: 'text/javascript' }));
     super(blob, { name: options.name });
+    // A thread that cannot start (e.g. blocked by COEP) would otherwise hang the boot silently.
+    this.addEventListener('error', () => post({ kind: 'error', errorKind: 'worker', message: 'A Java runtime thread could not start' }));
   }
   postMessage(message, transfer) {
     try {
@@ -277,7 +279,33 @@ async function boot(assets) {
   post({ kind: 'log', message: `module instantiated in ${Math.round(performance.now() - t0)} ms` });
 }
 
+/**
+ * Whether this frame can run JavaBox's threads: start a classic Blob Worker, exactly as the
+ * pthreads are started, and hand it shared WASM memory. In an opaque-origin (sandboxed) frame
+ * WebKit either reports crossOriginIsolated false, or (Safari 27) reports true but refuses
+ * Blob Workers under COEP ("Refused to load blob:null/... worker because of
+ * Cross-Origin-Embedder-Policy"), which would hang the boot. Only the probe catches the latter.
+ */
+function canRunThreads() {
+  if (self.crossOriginIsolated !== true || typeof SharedArrayBuffer !== 'function') return Promise.resolve(false);
+  return new Promise((resolve) => {
+    let worker = null;
+    const done = (ok) => { clearTimeout(timer); try { worker?.terminate(); } catch { /* gone */ } resolve(ok); };
+    const timer = setTimeout(() => done(false), 10_000);
+    try {
+      const src = 'self.onmessage = (e) => postMessage(e.data instanceof WebAssembly.Memory && e.data.buffer instanceof SharedArrayBuffer);';
+      worker = new NativeWorker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      worker.onmessage = (e) => done(e.data === true);
+      worker.onerror = () => done(false);
+      worker.postMessage(new WebAssembly.Memory({ initial: 1, maximum: 1, shared: true }));
+    } catch { done(false); }
+  });
+}
+
 // Ask the IDE page for the runtime files; boot() starts when they arrive. `isolated` tells the
-// page whether this (sandboxed) frame can share WASM memory with Workers; WebKit does not make
-// opaque-origin frames cross-origin isolated, and then the page reloads us without the sandbox.
-post({ kind: 'awaiting-assets', isolated: self.crossOriginIsolated === true });
+// page whether this frame can run the threads; if a sandboxed frame can't, the page reloads it
+// without the sandbox (WebKit). A same-origin frame reports synchronously: in WebKit, a message
+// it posts in a microtask right after this script ran arrives with an `event.source` that does
+// not match the iframe's contentWindow, and the page drops it (the boot then hung).
+if (self.origin !== 'null') post({ kind: 'awaiting-assets', isolated: self.crossOriginIsolated === true });
+else canRunThreads().then((isolated) => post({ kind: 'awaiting-assets', isolated }));

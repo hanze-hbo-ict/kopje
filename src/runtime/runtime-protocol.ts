@@ -12,7 +12,7 @@ export interface CompilerDiagnostic {
 
 export type RuntimeErrorKind =
   | 'no-main-class' | 'no-main-method' | 'bad-main-class' | 'no-sources'
-  | 'compiler-crash' | 'fatal' | 'abort' | 'boot' | 'not-isolated' | 'stack-overflow';
+  | 'compiler-crash' | 'fatal' | 'abort' | 'boot' | 'not-isolated' | 'stack-overflow' | 'worker';
 
 /** Lifecycle and I/O events delivered to JavaEngine.run's callback. */
 export type RuntimeEvent =

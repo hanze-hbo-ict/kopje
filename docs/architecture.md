@@ -193,5 +193,9 @@ whitelist entry is needed.
 - **WebKit fallback.** WebKit doesn't make opaque-origin frames cross-origin isolated, so the
   frame can't share WASM memory with its Workers (`DataCloneError`). The frame reports
   `isolated: false`; the engine then reloads it without `sandbox` (same-origin) for the rest of
-  the session. In that mode the frame still fetches nothing and keeps `connect-src 'none'`.
+  the session. Real Safari 27 instead reports `crossOriginIsolated: true` in the sandbox but
+  refuses Blob Workers under COEP, which hung the boot; so the frame now **probes** before
+  reporting: it starts a classic Blob Worker like the pthreads and hands it shared WASM memory
+  (`isolated` is false if that fails or takes over 10 s). As a safety net, a pthread Worker
+  `error` during a sandboxed boot also triggers the same-origin reload. In that mode the frame still fetches nothing and keeps `connect-src 'none'`.
   Verified: Chromium and Firefox sandboxed (Gate 5, `isolation.spec.mjs`), WebKit fallback.
