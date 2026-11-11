@@ -59,13 +59,16 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
   declarations; javac reports the mismatch. The main-class menu shows the name declared in
   the source, so it keeps showing `A` until the class itself is renamed.
 
-## Copy and paste
+## Export, import and reset
 
-- **Copy all / Paste** use a plain-text bundle: each file is preceded by a line
-  `// File: <path>`. A source line that is exactly `// File: <path>` is read as a new file
-  on paste. Pasting a single class without headers derives its path from `package` and the
-  first top-level type.
-- If the browser refuses the Clipboard API, the text is shown selected for Ctrl+C.
+- **Export / Import** use a plain-text bundle: each file is preceded by a line
+  `// File: <path>`. Exporting a single file copies its source without a header. A source
+  line that is exactly `// File: <path>` is read as a new file on import. Importing a single
+  class without headers derives its path from `package` and the first top-level type.
+- If the browser refuses the Clipboard API, the export preview is selected for Ctrl+C.
+- **Reset** returns to the last full import (Import → Replace project), including files added
+  since with Import → Add to project, or to the example project if nothing was imported. The
+  import is kept in `sessionStorage` with the files.
 
 ## Storage and privacy
 

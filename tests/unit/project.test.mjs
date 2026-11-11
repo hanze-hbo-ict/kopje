@@ -87,18 +87,45 @@ test('session store without storage works in memory', () => {
 test('replaceAll, addFiles, reset, isModified', () => {
   const pm = new ProjectManager(templateProject());
   assert.equal(pm.isModified(), false);
+  assert.equal(pm.differsFromTemplate(), false);
   pm.replaceAll({ 'q/Helper.java': 'package q; class Helper {}', 'q/App.java': 'package q; public class App { public static void main(String[] a) {} }' });
   assert.deepEqual(pm.paths, ['q/App.java', 'q/Helper.java']);
   assert.equal(pm.mainClass, 'q.App');
   assert.equal(pm.activeFile, 'q/App.java');
-  assert.equal(pm.isModified(), true);
+  assert.equal(pm.isModified(), false, 'a full import is the new baseline');
+  assert.equal(pm.differsFromTemplate(), true);
+  pm.setContent('q/App.java', 'package q; public class App { public static void main(String[] a) { int edited; } }');
   assert.deepEqual(pm.addFiles({ 'q/Helper.java': 'package q; class Helper { int x; }', 'q/New.java': '' }), ['q/Helper.java']);
   assert.equal(pm.source('q/Helper.java'), 'package q; class Helper { int x; }');
+  assert.equal(pm.isModified(), true, 'the edit to App is not part of the baseline');
   assert.throws(() => pm.addFiles({ '../x.java': '' }));
   assert.throws(() => pm.replaceAll({}), /empty/);
+  pm.setArgs('a b');
   pm.reset();
   assert.equal(pm.isModified(), false);
-  assert.equal(pm.mainClass, 'example.Main');
+  assert.deepEqual(pm.paths, ['q/App.java', 'q/Helper.java', 'q/New.java'], 'added files are kept by Reset');
+  assert.equal(pm.source('q/App.java'), 'package q; public class App { public static void main(String[] a) {} }');
+  assert.equal(pm.source('q/Helper.java'), 'package q; class Helper { int x; }');
+  assert.equal(pm.mainClass, 'q.App');
+  assert.equal(pm.args, '');
+
+  const fresh = new ProjectManager(templateProject());
+  fresh.deleteFile('example/Calculator.java');
+  fresh.reset();
+  assert.equal(fresh.differsFromTemplate(), false);
+  assert.equal(fresh.mainClass, 'example.Main');
+});
+
+test('the baseline is stored with the project', () => {
+  const storage = new MemoryStorage();
+  const pm = new ProjectManager(templateProject());
+  pm.replaceAll({ 'A.java': 'public class A { public static void main(String[] a) {} }' });
+  pm.setContent('A.java', 'public class A { public static void main(String[] a) { int x; } }');
+  new SessionStore(storage).save(pm.snapshot(), { theme: 'system' }, true);
+  const back = new ProjectManager(new SessionStore(storage).load().project);
+  assert.equal(back.isModified(), true);
+  back.reset();
+  assert.equal(back.source('A.java'), 'public class A { public static void main(String[] a) {} }');
 });
 
 test('session store clear removes stored state', () => {

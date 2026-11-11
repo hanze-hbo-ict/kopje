@@ -114,6 +114,8 @@ function setState(next: AppState) {
   }
   mainSelect.disabled = busy;
   argsInput.disabled = busy;
+  $<HTMLButtonElement>('project-reset').disabled = busy;
+  $<HTMLButtonElement>('project-import').disabled = busy;
   explorer?.render();
 }
 
@@ -230,7 +232,7 @@ project.onChange((c) => {
   save(true);
 });
 
-// ── copy / paste / new project (E1, E2, E4) ──────────────────────────────────
+// ── export / import / reset (E1, E2, E4) ──────────────────────────────────────
 function reopenProject() {
   editor.forgetAll();
   renderMainSelect();
@@ -245,16 +247,15 @@ new Transfer(project, {
   say: (text) => { $('file-message').textContent = text; },
   confirm: (m) => window.confirm(m),
   afterReplace: reopenProject,
-  newProject: () => {
+  reset: () => {
     project.reset();
-    store.clear();          // nothing of the previous project stays in this tab's storage
     reopenProject();
     consoleView.clear();
   },
 });
 // Closing the tab loses the project (sessionStorage only survives reloads).
 addEventListener('beforeunload', (e) => {
-  if (!project.isModified()) return;
+  if (!project.differsFromTemplate()) return;
   store.flush();
   e.preventDefault();
   e.returnValue = '';

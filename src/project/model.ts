@@ -6,6 +6,8 @@ export interface JavaProject {
   activeFile: string;
   /** Program arguments as typed on the console's command line (see args.ts). */
   args: string;
+  /** Files of the last full import (Import → Replace); Reset goes back to these. Absent: the template. */
+  baseline?: Record<string, string>;
 }
 
 export type ThemeChoice = 'system' | 'light' | 'dark';

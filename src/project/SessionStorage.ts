@@ -47,7 +47,14 @@ export class SessionStore {
       const theme: ThemeChoice = (['system', 'light', 'dark'] as const).includes(data.ui?.theme as ThemeChoice)
         ? (data.ui!.theme as ThemeChoice) : 'system';
       const args = typeof data.project.args === 'string' ? data.project.args.slice(0, MAX_ARGS_CHARS) : '';
-      return { project: { files, activeFile, mainClass, args }, ui: { theme } };
+      const project: JavaProject = { files, activeFile, mainClass, args };
+      if (data.project.baseline) {
+        try {
+          const baseline = validateFiles(data.project.baseline);
+          if (Object.keys(baseline).length) project.baseline = baseline;
+        } catch { /* invalid baseline: Reset falls back to the template */ }
+      }
+      return { project, ui: { theme } };
     } catch {
       return null; // corrupt or from an incompatible version: start fresh
     }
@@ -55,13 +62,13 @@ export class SessionStore {
 
   /** Debounced save for editing; `immediate` for file operations and UI changes. */
   save(project: JavaProject, ui: UiState, immediate = false) {
-    this.pending = { v: 1, project: { ...project, files: { ...project.files } }, ui: { ...ui } };
+    this.pending = { v: 1, project: { ...project, files: { ...project.files }, ...(project.baseline && { baseline: { ...project.baseline } }) }, ui: { ...ui } };
     clearTimeout(this.timer);
     if (immediate) this.flush();
     else this.timer = setTimeout(() => this.flush(), 400);
   }
 
-  /** Remove the stored session (New project). */
+  /** Remove the stored session (Reset to the template). */
   clear() {
     clearTimeout(this.timer);
     this.pending = null;

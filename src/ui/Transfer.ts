@@ -1,4 +1,4 @@
-// Copy for Ans / paste project (PLAN.md §14 E1, E2) and New project (E4).
+// Export (copy for Ans), Import (paste project) and Reset (PLAN.md §14 E1, E2, E4).
 import { parseBundle, serializeProject } from '../project/bundle.ts';
 import type { ProjectManager } from '../project/ProjectManager.ts';
 
@@ -7,104 +7,135 @@ export interface TransferHooks {
   say(text: string): void;           // short status, aria-live
   confirm(message: string): boolean;
   afterReplace(): void;              // files changed wholesale: reopen editor etc.
-  newProject(): void;
+  reset(): void;
 }
 
+const count = (n: number) => (n === 1 ? '1 file' : `${n} files`);
+
 export class Transfer {
-  private readonly dialog: HTMLDialogElement;
-  private readonly text: HTMLTextAreaElement;
-  private readonly title: HTMLElement;
-  private readonly help: HTMLElement;
-  private readonly message: HTMLElement;
-  private readonly replaceBtn: HTMLButtonElement;
-  private readonly addBtn: HTMLButtonElement;
-  private readonly closeBtn: HTMLButtonElement;
+  private readonly $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  // Import
+  private readonly importDialog = this.$<HTMLDialogElement>('transfer');
+  private readonly importText = this.$<HTMLTextAreaElement>('transfer-text');
+  private readonly importMessage = this.$('transfer-message');
+  // Export
+  private readonly exportDialog = this.$<HTMLDialogElement>('export');
+  private readonly exportList = this.$<HTMLUListElement>('export-list');
+  private readonly exportAll = this.$<HTMLInputElement>('export-all');
+  private readonly preview = this.$<HTMLTextAreaElement>('export-preview');
+  private readonly exportMessage = this.$('export-message');
+  private readonly exportCount = this.$('export-count');
+  private readonly copyBtn = this.$<HTMLButtonElement>('export-copy');
+  private selected = new Set<string>();
+
   private readonly project: ProjectManager;
   private readonly hooks: TransferHooks;
 
   constructor(project: ProjectManager, hooks: TransferHooks) {
     this.project = project;
     this.hooks = hooks;
-    const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-    this.dialog = $('transfer');
-    this.text = $('transfer-text');
-    this.title = $('transfer-title');
-    this.help = $('transfer-help');
-    this.message = $('transfer-message');
-    this.replaceBtn = $('transfer-replace');
-    this.addBtn = $('transfer-add');
-    this.closeBtn = $('transfer-close');
-    $('copy-file').addEventListener('click', () => void this.copyFile());
-    $('copy-all').addEventListener('click', () => void this.copyAll());
-    $('paste-project').addEventListener('click', () => this.openPaste());
-    $('new-project').addEventListener('click', () => this.newProject());
-    this.closeBtn.addEventListener('click', () => this.dialog.close());
-    this.replaceBtn.addEventListener('click', () => this.importText('replace'));
-    this.addBtn.addEventListener('click', () => this.importText('add'));
+    this.$('project-reset').addEventListener('click', () => this.reset());
+    this.$('project-import').addEventListener('click', () => this.openImport());
+    this.$('project-export').addEventListener('click', () => this.openExport());
+
+    this.$('transfer-close').addEventListener('click', () => this.importDialog.close());
+    this.$('transfer-replace').addEventListener('click', () => this.doImport('replace'));
+    this.$('transfer-add').addEventListener('click', () => this.doImport('add'));
+
+    this.$('export-close').addEventListener('click', () => this.exportDialog.close());
+    this.copyBtn.addEventListener('click', () => void this.copy());
+    this.exportAll.addEventListener('change', () => {
+      this.selected = new Set(this.exportAll.checked ? this.project.paths : []);
+      this.renderExport();
+    });
+    this.exportList.addEventListener('change', (e) => {
+      const box = e.target as HTMLInputElement;
+      if (box.checked) this.selected.add(box.value); else this.selected.delete(box.value);
+      this.renderExport();
+    });
   }
 
-  private async copy(text: string, what: string) {
+  // ── export ──────────────────────────────────────────────────────────────────
+  openExport() {
+    this.selected = new Set(this.project.paths);
+    this.exportList.textContent = '';
+    for (const path of this.project.paths) {
+      const li = document.createElement('li');
+      const label = document.createElement('label');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.value = path;
+      label.append(box, path);
+      li.append(label);
+      this.exportList.append(li);
+    }
+    this.exportMessage.textContent = '';
+    this.renderExport();
+    this.exportDialog.showModal();
+    this.copyBtn.focus();
+  }
+
+  /** One file: its source as is. Several: the bundle, each with a // File: header. */
+  exportText(paths = this.selectedPaths()): string {
+    if (paths.length === 1) return this.project.source(paths[0]);
+    return serializeProject({ ...this.project.files }, paths);
+  }
+
+  private selectedPaths() { return this.project.paths.filter((p) => this.selected.has(p)); }
+
+  private renderExport() {
+    const paths = this.selectedPaths();
+    const total = this.project.paths.length;
+    for (const box of this.exportList.querySelectorAll('input')) box.checked = this.selected.has(box.value);
+    this.exportAll.checked = paths.length === total;
+    this.exportAll.indeterminate = paths.length > 0 && paths.length < total;
+    this.preview.value = this.exportText(paths);
+    this.preview.placeholder = paths.length ? '' : 'No files selected';
+    this.exportCount.textContent = `${count(paths.length)} selected`;
+    this.copyBtn.disabled = paths.length === 0;
+    this.exportMessage.textContent = '';
+  }
+
+  private async copy() {
+    const paths = this.selectedPaths();
+    if (!paths.length) return;
+    const what = paths.length === 1 ? paths[0] : count(paths.length);
     try {
       if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
-      await navigator.clipboard.writeText(text);
-      this.hooks.say(`Copied ${what}.`);
+      await navigator.clipboard.writeText(this.preview.value);
     } catch {
-      this.openCopyFallback(text, what);
+      // The browser refused programmatic copying: select the preview for Ctrl+C.
+      this.exportMessage.textContent = 'Automatic copying is blocked in this browser. The text is selected: press Ctrl+C (⌘C on a Mac).';
+      this.preview.focus();
+      this.preview.select();
+      return;
     }
+    this.exportDialog.close();
+    this.hooks.say(`Copied ${what}.`);
   }
 
-  copyFile() {
-    const path = this.project.activeFile;
-    return this.copy(this.project.source(path), path);
-  }
-
-  copyAll() {
-    const n = this.project.paths.length;
-    return this.copy(serializeProject({ ...this.project.files }, this.project.paths), n === 1 ? '1 file' : `${n} files`);
-  }
-
-  /** The browser refused programmatic copying: show the text selected for Ctrl+C. */
-  private openCopyFallback(text: string, what: string) {
-    this.title.textContent = `Copy ${what}`;
-    this.help.textContent = 'Automatic copying is blocked in this browser. The text below is selected: press Ctrl+C (⌘C on a Mac), then close this window.';
-    this.text.value = text;
-    this.text.readOnly = true;
-    this.message.textContent = '';
-    this.replaceBtn.hidden = true;
-    this.addBtn.hidden = true;
-    this.closeBtn.textContent = 'Close';
-    this.dialog.showModal();
-    this.text.focus();
-    this.text.select();
-  }
-
-  openPaste() {
+  // ── import ──────────────────────────────────────────────────────────────────
+  openImport() {
     if (this.hooks.locked()) return;
-    this.title.textContent = 'Paste project';
-    this.help.textContent = 'Paste files copied with "Copy all" (each starts with a // File: line), or a single class.';
-    this.text.value = '';
-    this.text.readOnly = false;
-    this.message.textContent = '';
-    this.replaceBtn.hidden = false;
-    this.addBtn.hidden = false;
-    this.closeBtn.textContent = 'Cancel';
-    this.dialog.showModal();
-    this.text.focus();
+    this.importText.value = '';
+    this.importMessage.textContent = '';
+    this.importDialog.showModal();
+    this.importText.focus();
   }
 
-  private importText(mode: 'replace' | 'add') {
+  private doImport(mode: 'replace' | 'add') {
     let files: Record<string, string>;
     try {
-      files = parseBundle(this.text.value);
+      files = parseBundle(this.importText.value);
     } catch (e) {
-      this.message.textContent = (e as Error).message;
-      this.text.focus();
+      this.importMessage.textContent = (e as Error).message;
+      this.importText.focus();
       return;
     }
     const paths = Object.keys(files);
     try {
       if (mode === 'replace') {
-        if (this.project.isModified() && !this.hooks.confirm(`Replace all ${this.project.paths.length} files with the ${paths.length} pasted file(s)? Your current files will be lost.`)) return;
+        if (this.project.isModified() && !this.hooks.confirm(`Replace all ${count(this.project.paths.length)} with the ${count(paths.length)} pasted? Your current changes will be lost.`)) return;
         this.project.replaceAll(files);
       } else {
         const clash = paths.filter((p) => p in this.project.files);
@@ -112,17 +143,20 @@ export class Transfer {
         this.project.addFiles(files);
       }
     } catch (e) {
-      this.message.textContent = (e as Error).message;
+      this.importMessage.textContent = (e as Error).message;
       return;
     }
-    this.dialog.close();
+    this.importDialog.close();
     this.hooks.afterReplace();
-    this.hooks.say(`Imported ${paths.length === 1 ? '1 file' : `${paths.length} files`}.`);
+    this.hooks.say(`Imported ${count(paths.length)}.`);
   }
 
-  newProject() {
+  // ── reset ───────────────────────────────────────────────────────────────────
+  reset() {
     if (this.hooks.locked()) return;
-    if (this.project.isModified() && !this.hooks.confirm('Start a new project? All current files will be removed from this tab.')) return;
-    this.hooks.newProject();
+    const to = this.project.baselineIsTemplate ? 'the example project' : 'the last imported project';
+    if (this.project.isModified() && !this.hooks.confirm(`Reset to ${to}? Your changes since then will be lost.`)) return;
+    this.hooks.reset();
+    this.hooks.say(`Reset to ${to}.`);
   }
 }

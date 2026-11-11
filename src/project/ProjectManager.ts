@@ -17,6 +17,7 @@ export class ProjectManager {
 
   constructor(initial: JavaProject) {
     this.project = { files: { ...initial.files }, mainClass: initial.mainClass, activeFile: initial.activeFile, args: initial.args ?? '' };
+    if (initial.baseline) this.project.baseline = { ...initial.baseline };
     if (!this.findMain(this.project.mainClass)) this.project.mainClass = this.defaultMain();
     this.syncHome();
   }
@@ -24,7 +25,15 @@ export class ProjectManager {
   onChange(fn: (c: ProjectChange) => void) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   private emit(c: ProjectChange) { for (const fn of this.listeners) fn(c); }
 
-  snapshot(): JavaProject { return { ...this.project, files: { ...this.project.files } }; }
+  snapshot(): JavaProject {
+    const s: JavaProject = { ...this.project, files: { ...this.project.files } };
+    if (s.baseline) s.baseline = { ...s.baseline };
+    return s;
+  }
+  /** What Reset restores: the last full import, or the starter template. */
+  private get baseline(): Record<string, string> { return this.project.baseline ?? templateProject().files; }
+  /** True while Reset would go back to the unchanged starter template (nothing was imported). */
+  get baselineIsTemplate() { return !this.project.baseline; }
   get files(): Readonly<Record<string, string>> { return this.project.files; }
   get paths(): string[] { return Object.keys(this.project.files).sort((a, b) => a.localeCompare(b)); }
   get activeFile() { return this.project.activeFile; }
@@ -150,25 +159,37 @@ export class ProjectManager {
     this.emit({ type: 'files' });
   }
 
-  /** Replace every file (paste project). Picks a main class that exists, preferring one with main(). */
+  /**
+   * Replace every file (full import); the result becomes what Reset returns to.
+   * Picks a main class that exists, preferring one with main().
+   */
   replaceAll(files: Record<string, string>) {
     const valid = validateFiles(files);
-    const paths = Object.keys(valid);
-    if (!paths.length) throw new Error('The project would be empty');
-    this.project.files = { ...valid };
+    if (!Object.keys(valid).length) throw new Error('The project would be empty');
+    this.project.baseline = { ...valid };
+    this.load(valid);
+    this.emit({ type: 'files' });
+  }
+
+  private load(files: Record<string, string>) {
+    this.project.files = { ...files };
     this.project.activeFile = this.paths[0];
     this.project.mainClass = this.defaultMain();
     const main = this.findMain(this.project.mainClass);
     if (main) this.project.activeFile = main.path;
     this.syncHome();
-    this.emit({ type: 'files' });
   }
 
-  /** Add or overwrite files (paste into project). Returns the paths that were overwritten. */
+  /**
+   * Add or overwrite files (import into project). The files are merged into what Reset
+   * returns to as well. Returns the paths that were overwritten.
+   */
   addFiles(files: Record<string, string>): string[] {
     const merged = validateFiles({ ...this.project.files, ...files });
+    const baseline = validateFiles({ ...this.baseline, ...files });
     const overwritten = Object.keys(files).filter((p) => p in this.project.files);
     this.project.files = { ...merged };
+    this.project.baseline = { ...baseline };
     this.project.activeFile = Object.keys(files).sort()[0] ?? this.project.activeFile;
     if (!this.findMain(this.project.mainClass)) this.project.mainClass = this.defaultMain();
     this.syncHome();
@@ -176,18 +197,21 @@ export class ProjectManager {
     return overwritten;
   }
 
-  /** Back to the starter template (New project). */
+  /** Back to the last full import, or the starter template when there was none. Clears the arguments. */
   reset() {
-    const t = templateProject();
-    this.project = { ...t, files: { ...t.files } };
-    this.syncHome();
+    this.load(this.baseline);
+    this.project.args = '';
     this.emit({ type: 'files' });
   }
 
+  /** True when the files differ from what Reset would restore. */
+  isModified(): boolean { return !sameFiles(this.project.files, this.baseline); }
+
   /** True when the files differ from the starter template (used for the unload warning). */
-  isModified(): boolean {
-    const t = templateProject().files;
-    const a = Object.keys(this.project.files), b = Object.keys(t);
-    return a.length !== b.length || a.some((p) => this.project.files[p] !== t[p]);
-  }
+  differsFromTemplate(): boolean { return !sameFiles(this.project.files, templateProject().files); }
+}
+
+function sameFiles(a: Record<string, string>, b: Record<string, string>) {
+  const ka = Object.keys(a), kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((p) => Object.prototype.hasOwnProperty.call(b, p) && a[p] === b[p]);
 }
