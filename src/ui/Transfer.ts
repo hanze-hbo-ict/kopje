@@ -8,6 +8,7 @@ export interface TransferHooks {
   confirm(message: string): boolean;
   afterReplace(): void;              // files changed wholesale: reopen editor etc.
   reset(): void;
+  clearAll(): void;                  // wipe the stored session and reload, as a new tab
 }
 
 const count = (n: number) => (n === 1 ? '1 file' : `${n} files`);
@@ -35,6 +36,7 @@ export class Transfer {
     this.project = project;
     this.hooks = hooks;
     this.$('project-reset').addEventListener('click', () => this.reset());
+    this.$('project-clear').addEventListener('click', () => this.clearAll());
     this.$('project-import').addEventListener('click', () => this.openImport());
     this.$('project-export').addEventListener('click', () => this.openExport());
 
@@ -158,5 +160,12 @@ export class Transfer {
     if (this.project.isModified() && !this.hooks.confirm(`Reset to ${to}? Your changes since then will be lost.`)) return;
     this.hooks.reset();
     this.hooks.say(`Reset to ${to}.`);
+  }
+
+  /** Everything back to a new tab: files, last import, arguments, theme, console, Java. Also while running. */
+  clearAll() {
+    if (this.project.differsFromTemplate()
+      && !this.hooks.confirm('Clear all and start as a new tab? All files, including the last import, will be lost.')) return;
+    this.hooks.clearAll();
   }
 }

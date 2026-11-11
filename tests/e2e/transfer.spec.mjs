@@ -120,6 +120,41 @@ test('E2: import a three-file project, run it; add with overwrite; invalid input
   await expect(page.locator('#file-list button[data-path="util/Strings.java"]')).toHaveCount(1);
 });
 
+test('E4: Clear all wipes the stored session and starts as a new tab, also while running', async ({ page }) => {
+  await page.goto('/');
+  await ready(page);
+  await page.locator('#project-import').click();
+  await page.locator('#transfer-text').fill(
+    '// File: Loop.java\npublic class Loop { public static void main(String[] a) { while (true) {} } }\n// File: data/x.txt\nhello\n');
+  await page.locator('#transfer-replace').click();
+  await page.locator('#args').fill('one two');
+  await page.locator('#theme').click();
+  await page.locator('#run').click();
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'running', { timeout: 120_000 });
+  await expect(page.locator('#project-clear')).toBeEnabled();
+
+  page.once('dialog', (d) => d.accept());
+  await page.locator('#project-clear').click();
+  await page.waitForEvent('load');
+  await ready(page);
+  await expect(page.locator('#file-list button[data-path]')).toHaveCount(1);
+  await expect(page.locator('#filename-text')).toHaveText('Main.java');
+  await expect(page.locator('#args')).toHaveValue('');
+  // Reset now goes to a new project, not to the import that was cleared.
+  await expect(page.locator('#project-reset')).toBeEnabled();
+  const stored = await page.evaluate(() => JSON.parse(sessionStorage.getItem('kopje:session:v1') ?? 'null'));
+  expect(stored?.project.baseline ?? null).toBeNull();
+  expect(stored?.ui.theme ?? 'system').toBe('system');
+
+  // An untouched project clears without asking.
+  let asked = false;
+  page.once('dialog', (d) => { asked = true; void d.dismiss(); });
+  await page.locator('#project-clear').click();
+  await page.waitForEvent('load');
+  await ready(page);
+  expect(asked).toBe(false);
+});
+
 test('E4: Reset returns to the last full import (plus added files); unload warning once modified', async ({ page }) => {
   await page.goto('/');
   await ready(page);

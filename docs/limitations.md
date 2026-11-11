@@ -87,6 +87,10 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
   added since with Import → Add to project, or to a new project (one `Main.java` with
   only a comment) if nothing was imported. The import is kept in `sessionStorage` with
   the files.
+- **Clear all** removes the tab's stored session and reloads the page, so it starts as a
+  new tab: a new project, no import to reset to, no arguments, system theme, Java
+  restarted. It works while a program runs. It asks first unless the project is the
+  untouched new project.
 
 ## Storage and privacy
 
@@ -95,7 +99,7 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
   `sessionStorage` is not a secure-deletion mechanism. Compiled classes and console
   output are never stored. If storage fails (quota, disabled), the IDE keeps working in
   memory and shows a warning in the footer. **Reset** replaces the stored files with the
-  ones it restores; it does not wipe the stored session. Closing or leaving the tab with
+  ones it restores; it does not wipe the stored session (**Clear all** does). Closing or leaving the tab with
   a changed project shows the browser's "leave page?" warning (also on reload, which the
   browser can't tell apart).
 

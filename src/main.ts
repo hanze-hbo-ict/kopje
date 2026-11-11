@@ -20,7 +20,10 @@ const store = new SessionStore();
 const restored = store.load();
 const project = new ProjectManager(restored?.project ?? templateProject());
 const ui: UiState = restored?.ui ?? { theme: 'system' };
+/** Set by Clear all: nothing may be stored again before the page reloads. */
+let clearing = false;
 const save = (immediate = false) => {
+  if (clearing) return;
   store.save(project.snapshot(), ui, immediate);
   if (immediate) $('storage-warning').hidden = store.persistent;
 };
@@ -267,6 +270,12 @@ new Transfer(project, {
     reopenProject();
     consoleView.clear();
   },
+  clearAll: () => {
+    // A reload with no stored session is exactly a new tab, and tears down a running program.
+    clearing = true;
+    store.clear();
+    location.reload();
+  },
 });
 // ── files written by the program (PLAN.md §16 F3) ───────────────────────────
 const outputFiles = new OutputFiles({
@@ -284,7 +293,7 @@ const outputFiles = new OutputFiles({
 
 // Closing the tab loses the project (sessionStorage only survives reloads).
 addEventListener('beforeunload', (e) => {
-  if (!project.differsFromTemplate()) return;
+  if (clearing || !project.differsFromTemplate()) return;
   store.flush();
   e.preventDefault();
   e.returnValue = '';
