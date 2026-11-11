@@ -43,9 +43,12 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
 - **Minimal class library:** `java.base`, `java.logging`, `jdk.compiler` (+ `java.compiler`,
   `jdk.internal.opt`, `jdk.zipfs`). No `java.sql`, `java.desktop` (AWT/Swing),
   `java.net.http`, `java.xml`. Add modules only after a compatibility test needs them.
-- **Threads:** out of scope; Emscripten's pthread pool (16) is shared with JVM internals.
-  The JVM's own `Finalizer`/`Common-Cleaner` threads die at boot with an NPE (upstream
-  behaviour), so finalizers/cleaners don't run.
+- **Threads work** (checked by hand 2026-11-11 in Chromium, Firefox and WebKit:
+  `Thread`, `synchronized`, `ExecutorService`, parallel streams, 40 threads at once);
+  there is no automated test, as Kopje adds no code for them. Emscripten starts a pool
+  of 8 Workers and adds more on demand. The JVM's own `Finalizer`/`Common-Cleaner`
+  threads die at boot with an NPE (upstream behaviour), so finalizers/cleaners don't
+  run.
 - **No network, processes or native libraries** (by design; see capability matrix).
 - **`System.exit` code** is observed through JDK 21's `Runtime.exit` logging (ADR-6); a
   program that reconfigures the `java.lang.Runtime` JUL logger can hide its exit code
@@ -87,13 +90,14 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
 
 ## Storage and privacy
 
-- Files and UI state live in **`sessionStorage`** of the tab. Browsers may restore it when a
-  closed tab or a whole session is restored; a duplicated tab starts with a copy;
+- Files and UI state live in **`sessionStorage`** of the tab. Browsers may restore it
+  when a closed tab or a whole session is restored; a duplicated tab starts with a copy;
   `sessionStorage` is not a secure-deletion mechanism. Compiled classes and console
   output are never stored. If storage fails (quota, disabled), the IDE keeps working in
-  memory and shows a warning in the footer. **New** resets to the template and removes the
-  stored session. Closing or leaving the tab with a changed project shows the browser's
-  "leave page?" warning (also on reload, which the browser can't tell apart).
+  memory and shows a warning in the footer. **Reset** replaces the stored files with the
+  ones it restores; it does not wipe the stored session. Closing or leaving the tab with
+  a changed project shows the browser's "leave page?" warning (also on reload, which the
+  browser can't tell apart).
 
 ## Browsers
 

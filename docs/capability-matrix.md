@@ -25,7 +25,7 @@ source build (`java.base, java.logging, jdk.compiler`), which is what we ship. T
 | `System.exit` | allowed: ends the run only | ADR-6 + iframe teardown | slice spec: exit code 3 then clean run |
 | CPU time | bounded by wall clock (120 s, excluding stdin wait) | engine timer + teardown | not a CPU quota |
 | Memory | bounded: 512 MB WASM max, `-Xmx96m`, code cache 8 MB, metaspace 64 MB | link flags, `jvm-main.c` | `memory.spec.mjs`: ~232 MB heap per runtime; `OutOfMemoryError` is a normal program error |
-| Threads in student code | unverified / out of scope | pool of 16 pthreads | — |
+| Threads in student code | allowed | Emscripten pthreads (pool of 8, grows on demand) | checked by hand 2026-11-11 (see limitations) |
 | Doom graphics/audio/input natives | **removed** | own `runtime/native/jvm-main.c` (N1); build fails if Doom/audio symbols are present | `build-runtime-source.sh` checks |
 | Spoofing driver control events | **allowed (residual)** | — | affects own console only |
 | Code/classes/JVM options chosen by URL parameters | **denied** | runtime host uses fixed same-origin paths; only `outputCap` (clamped) is read | `security.spec.mjs` S1 |
