@@ -60,7 +60,7 @@ Prefer a dedicated runtime origin in a sandboxed iframe for a deployed public ID
 4. Run existing tests. Build from source if feasible. If using prebuilt artifacts temporarily, record that changes to the class library / native host bindings require a source build.
 5. Document the actual protocol, compilation model, native imports, filesystem mounts, networking support, persistent storage, termination behavior, Worker topology, browser compatibility and thread assumptions.
 6. Record baseline metrics: total compressed/uncompressed assets, `.wasm`/`.data` sizes, cold startup, warm compilation, runtime memory, and compile+run latency. Include test hardware and browser.
-7. Audit repository and third-party licences (MIT for JavaBox repository; OpenJDK GPLv2 + Classpath Exception and other components may impose separate redistribution/source requirements). Preserve notices and document the distribution plan.
+7. Audit repository and third-party licenses (MIT for JavaBox repository; OpenJDK GPLv2 + Classpath Exception and other components may impose separate redistribution/source requirements). Preserve notices and document the distribution plan.
 
 **Gate 0:** Baseline works locally, tests can be run, relevant runtime interfaces are mapped, and baseline measurements have been saved under `docs/baseline.md`.
 
@@ -162,7 +162,7 @@ Maintain `docs/capability-matrix.md` with each capability marked **allowed / den
 
 ### 7.1 UI/UX reference: Klode
 
-Use **[Klode](https://klode.app)**, our existing online Python environment, as the **primary UI and interaction reference**. Inspect the running site before implementing the frontend, and, if available and authorized, inspect its source repository to identify reusable design tokens, layout conventions, components, keyboard interactions, and console behavior. Do not assume access to its source code or copy it without checking the repository licence.
+Use **[Klode](https://klode.app)**, our existing online Python environment, as the **primary UI and interaction reference**. Inspect the running site before implementing the frontend, and, if available and authorized, inspect its source repository to identify reusable design tokens, layout conventions, components, keyboard interactions, and console behavior. Do not assume access to its source code or copy it without checking the repository license.
 
 Aim for the same lightweight, deliberately uncluttered experience:
 

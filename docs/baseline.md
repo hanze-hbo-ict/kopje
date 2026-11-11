@@ -1,7 +1,7 @@
 # Phase 0 — JavaBox baseline
 
 **Status:** Gate 0 **met for the prebuilt runtime** (2026-11-10). Static reconnaissance,
-licence audit, host-side tests, and end-to-end runs in Chromium, Firefox and WebKit are done.
+license audit, host-side tests, and end-to-end runs in Chromium, Firefox and WebKit are done.
 A reproducible **source build** exists (`docs/runtime-build.md`) and is what we ship.
 Open: upstream's own Playwright suite was not run (it targets Doom/upstream UI, which we do
 not use).

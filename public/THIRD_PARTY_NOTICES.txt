@@ -11,8 +11,8 @@ Kopje (this application)
   https://github.com/hanze-hbo-ict/kopje/tree/@KOPJE_COMMIT@
 
 OpenJDK 21 (HotSpot Zero VM, java.base/java.logging/jdk.compiler class library)
-  Licence: GNU General Public License, version 2, with the Classpath Exception
-  (and the OpenJDK Assembly Exception). Per-module licence files are included in the
+  License: GNU General Public License, version 2, with the Classpath Exception
+  (and the OpenJDK Assembly Exception). Per-module license files are included in the
   runtime image under /opt/jdk/legal/. Corresponding source: OpenJDK fork
   https://github.com/bmarti44/openjdk (branch wasm-emscripten), commit
   e339656cdd1c9e09aaf1c4ca9a87c399e3df56a7; class library jlinked from Eclipse
@@ -23,7 +23,7 @@ JavaBox (browser JVM embedding, build scripts)
   MIT License, Copyright (c) 2026 Brian Martin
 
 libffi (Emscripten port, commit 0b72a27b7cd647eb31f15144dcfeacde864de9f1)
-  MIT-style licence, Copyright (c) 1996-2024 Anthony Green, Red Hat, Inc and others
+  MIT-style license, Copyright (c) 1996-2024 Anthony Green, Red Hat, Inc and others
 
 Emscripten runtime support code
   MIT License / University of Illinois/NCSA Open Source License

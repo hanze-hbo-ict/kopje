@@ -15,12 +15,12 @@ See `PLAN.md` for scope and `docs/` for design and evidence:
 | `docs/limitations.md` | known gaps |
 | `docs/runtime-build.md` | reproducible source build of the runtime |
 | `docs/klode-ui-reference.md` | UI reference and Java adaptations |
-| `docs/licensing.md` | licence audit and distribution plan |
+| `docs/licensing.md` | license audit and distribution plan |
 | `docs/deployment.md` | hosting requirements, build + verify, post-deploy checks |
 
-## Licence
+## License
 
-Kopje is released under the MIT No Attribution licence (`LICENSE.md`). Parts adapted from
+Kopje is released under the MIT No Attribution license (`LICENSE.md`). Parts adapted from
 Klode and JavaBox keep their MIT notices, and the built runtime contains OpenJDK (GPLv2 with
 the Classpath Exception); see `docs/licensing.md` and `public/THIRD_PARTY_NOTICES.txt`.
 

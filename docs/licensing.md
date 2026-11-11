@@ -1,6 +1,6 @@
 # Licensing (Phase 0 audit — not legal advice)
 
-| Component | Licence | Shipped to users? | Obligations / plan |
+| Component | License | Shipped to users? | Obligations / plan |
 |---|---|---|---|
 | Kopje (this repo, <https://github.com/hanze-hbo-ict/kopje>) | **MIT No Attribution (MIT-0)**, `LICENSE.md`. **Decision (2026-11-10):** the owner judges that their own contributions are not a protectable work under Dutch law (the code is AI-generated); so `LICENSE.md` names no copyright holder. MIT-0 grants every right anyway in case any part is, without an attribution requirement. Parts derived from Klode (styles, theme, console patterns) and JavaBox (`runtime/native/jvm-main.c`) stay under MIT and keep those notices | yes, incl. `runtime/native/*` linked into the `.wasm` and the NIO patch in the `.data` | public repo is the source offer for our own runtime parts: footer link "Kopje on GitHub" and, in `THIRD_PARTY_NOTICES.txt`, a link to the exact deployed commit (filled in at build; `verify:dist` requires it and rejects builds with uncommitted changes) |
 | JavaBox (`vendor/javabox`) | MIT, © 2026 Brian Martin | glue `.mjs`, `jvm-main.c` (compiled into `.wasm`) | keep MIT notice in distributed `THIRD_PARTY_NOTICES` |
