@@ -7,6 +7,7 @@
 //   stdin    (host -> Java): append-only MEMFS file /work/stdin, polled by the driver
 //
 // Messages from the parent: {type:'start', files, mainClass, args} | {type:'stdin', text} | {type:'eof'}
+//                           | {type:'collect'} (files written by the program, PLAN.md §16 F3)
 // Messages to the parent:   {type:'event', event:{...}}  (see src/runtime/runtime-protocol.ts)
 
 const EOF_BYTE = 0x04;             // driver maps 0x04 to end-of-stream
@@ -27,7 +28,7 @@ const OUTPUT_CAP = (() => {
 // engine). The parent's origin can't be named from an opaque origin, so messages go to
 // `parent` with target "*". That is safe: the runtime document's CSP (frame-ancestors 'self')
 // means only our own pages can be the parent.
-const post = (event) => parent.postMessage({ type: 'event', event }, '*');
+const post = (event, transfer = []) => parent.postMessage({ type: 'event', event }, '*', transfer);
 
 let Module = null;
 let started = false;
@@ -127,6 +128,77 @@ addEventListener('error', (e) => {
   });
 });
 
+// ── files written by the program (PLAN.md §16 F3) ───────────────────────────────
+// At start the whole file system is recorded (size + mtime per file); on 'collect' every
+// file that is new or changed is sent back, up to the limits. Kopje's own runtime state
+// (/work: sources and stdin, the JVM's perf data, devices) is not the program's output.
+// Project data files count as changed only when their content differs.
+const SKIP_FS = /^\/(dev|proc|sys|work)(\/|$)|^\/tmp\/hsperfdata_root(\/|$)/;
+const MAX_OUTPUT_FILES = 50;
+const OUTPUT_FILE_LIMIT = 1 << 20;     // bytes per file
+const OUTPUT_TOTAL_LIMIT = 5 << 20;    // bytes in total
+let fsBefore = null;                   // Map<path, {size, mtime}>
+const dataFiles = new Map();           // absolute path -> UTF-8 bytes as copied in
+let collected = false;
+
+function snapshotFs(FS) {
+  const out = new Map();
+  const walk = (dir) => {
+    let names;
+    try { names = FS.readdir(dir); } catch { return; }
+    for (const name of names) {
+      if (name === '.' || name === '..') continue;
+      const path = (dir === '/' ? '' : dir) + '/' + name;
+      if (SKIP_FS.test(path)) continue;
+      let st;
+      try { st = FS.lstat(path); } catch { continue; }
+      if (FS.isDir(st.mode)) walk(path);
+      else if (FS.isFile(st.mode)) out.set(path, { size: st.size, mtime: +st.mtime });
+    }
+  };
+  walk('/');
+  return out;
+}
+
+function readPrefix(FS, path, length) {
+  const buf = new Uint8Array(length);
+  const stream = FS.open(path, 'r');
+  try { return buf.subarray(0, FS.read(stream, buf, 0, length, 0)); } finally { FS.close(stream); }
+}
+
+const sameBytes = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+function collectFiles() {
+  const FS = Module.FS;
+  const now = snapshotFs(FS);
+  const changed = [];
+  for (const [path, st] of now) {
+    const before = fsBefore.get(path);
+    const original = dataFiles.get(path);
+    if (original) {
+      if (st.size === original.length) {
+        try { if (sameBytes(readPrefix(FS, path, st.size), original)) continue; } catch { continue; }
+      }
+    } else if (before && before.size === st.size && before.mtime === st.mtime) continue;
+    changed.push(path);
+  }
+  // Working-directory files first, then other absolute paths; alphabetical within each.
+  const shown = (path) => (path.startsWith('/root/') ? path.slice('/root/'.length) : path);
+  changed.sort((a, b) => (shown(a).startsWith('/') - shown(b).startsWith('/')) || (shown(a) < shown(b) ? -1 : 1));
+  const files = [];
+  const transfer = [];
+  let budget = OUTPUT_TOTAL_LIMIT;
+  for (const path of changed.slice(0, MAX_OUTPUT_FILES)) {
+    const size = now.get(path).size;
+    let bytes;
+    try { bytes = readPrefix(FS, path, Math.min(size, OUTPUT_FILE_LIMIT, budget)).slice(); } catch { continue; }
+    budget -= bytes.length;
+    files.push({ path: shown(path), size, bytes: bytes.buffer, truncated: bytes.length < size, changed: fsBefore.has(path) });
+    transfer.push(bytes.buffer);
+  }
+  return { event: { kind: 'files', files, more: Math.max(0, changed.length - MAX_OUTPUT_FILES) }, transfer };
+}
+
 // ── messages from the parent ────────────────────────────────────────────────────
 addEventListener('message', (e) => {
   if (e.source !== parent) return;
@@ -154,8 +226,10 @@ addEventListener('message', (e) => {
       try {
         if (full.lastIndexOf('/') > 0) FS.mkdirTree(full.slice(0, full.lastIndexOf('/')));
         FS.writeFile(full, text);
+        if (full.startsWith('/root/')) dataFiles.set(full, encoder.encode(text));
       } catch { /* file/folder clash: rejected by the parent already */ }
     }
+    fsBefore = snapshotFs(FS);
     // Each argument travels base64-encoded with a '+' prefix ('+' alone = empty), so
     // spaces, quotes and non-ASCII text survive the one-line control message.
     const args = Array.isArray(m.args) ? m.args.filter((a) => typeof a === 'string').slice(0, 100) : [];
@@ -165,6 +239,16 @@ addEventListener('message', (e) => {
     enqueueStdin(encoder.encode(m.text));
   } else if (m.type === 'eof' && started) {
     enqueueStdin([EOF_BYTE]);
+  } else if (m.type === 'collect' && started && fsBefore && !collected) {
+    // Answered once, right before the parent removes this frame. MEMFS lives on this thread,
+    // so the JVM's file calls are paused while it is read: each file is seen as a whole.
+    collected = true;
+    let result;
+    try { result = collectFiles(); } catch (err) {
+      post({ kind: 'log', message: 'collecting files failed: ' + err });
+      result = { event: { kind: 'files', files: [], more: 0 }, transfer: [] };
+    }
+    post(result.event, result.transfer);
   } else if (m.type === 'stats') {
     // Diagnostics: current WASM heap size (used by tests/e2e/memory.spec.mjs).
     post({ kind: 'stats', heapBytes: Module.HEAPU8.length });

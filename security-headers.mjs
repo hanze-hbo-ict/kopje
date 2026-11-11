@@ -19,10 +19,11 @@ export const CSP = [
   "script-src 'self' 'wasm-unsafe-eval' blob:", // WASM; blob: for the runtime module in the sandbox
   "worker-src 'self' blob:",                 // Emscripten pthread Workers (Blob in the sandboxed runtime)
   "connect-src 'self'",                      // blocks fetch/XHR/WebSocket egress (also S3)
-  "img-src 'self' data:",
+  "img-src 'self' data: blob:",               // blob: images the program wrote (PLAN.md §16 F3)
+  "media-src blob:",                         // audio/video the program wrote
   "style-src 'self'",
   "font-src 'self'",
-  "frame-src 'self'",                        // the runtime iframe only
+  "frame-src 'self' blob:",                  // the runtime iframe; blob: PDFs the program wrote (F3)
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",

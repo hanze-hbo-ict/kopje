@@ -27,10 +27,19 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
   `fileio.spec.mjs`). Files exist only during one run. The working directory (`/root`) is
   the project root: the project's data files are copied there before each run, so
   `data/scores.csv` in the file list is `new File("data/scores.csv")`. The `.java` files
-  are not visible to the program as files (they live in `/work/src`). Files the program
-  writes are discarded with the run. `Files.getFileStore` and `Files.probeContentType` throw `UnsatisfiedLinkError`
-  (macOS-only natives). The class library is the macOS one with `sun.nio.fs` recompiled
-  against Emscripten's constants (`scripts/build-nio-patch.sh`, ADR-8).
+  are not visible to the program as files (they live in `/work/src`). `Files.getFileStore`
+  and `Files.probeContentType` throw `UnsatisfiedLinkError` (macOS-only natives). The class
+  library is the macOS one with `sun.nio.fs` recompiled against Emscripten's constants
+  (`scripts/build-nio-patch.sh`, ADR-8).
+- **Files the program writes** are listed under the console after the run (PLAN.md §16 F3)
+  and can be viewed; the run never changes the project, only "Add to project" does (text
+  files in the working directory, not `.java`). At most 50 files, 1 MB per file and 5 MB in
+  total are collected; beyond that a file is shown truncated. Deleted files are not
+  reported. After Stop or a timeout the files are as they were at that moment, so data
+  still in a Java buffer (an unclosed `PrintWriter`) is missing, as on a real disk. A
+  project data file rewritten with the same content is not listed. Images, audio, video
+  and PDF are shown when the browser supports them (PDF only in browsers with a built-in
+  viewer, not on most phones); other binary files are shown as bytes.
 - **Minimal class library:** `java.base`, `java.logging`, `jdk.compiler` (+ `java.compiler`,
   `jdk.internal.opt`, `jdk.zipfs`). No `java.sql`, `java.desktop` (AWT/Swing),
   `java.net.http`, `java.xml`. Add modules only after a compatibility test needs them.

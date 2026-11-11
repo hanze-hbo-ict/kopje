@@ -15,7 +15,7 @@ source build (`java.base, java.logging, jdk.compiler`), which is what we ship. T
 | DNS | **denied** | same as TCP | probe `dns` |
 | Read host/real filesystem (`/etc/passwd`) | **unsupported** | only MEMFS exists (`/tmp /home /dev /proc /root /work /opt`) | probe `fileOutside` |
 | Read runtime files (`/opt/jdk/**` via `..`) | allowed | per-run MEMFS, destroyed with the iframe | probe `fileTraversal`; harmless, no user data in MEMFS |
-| Read/write files in MEMFS (`java.io`, `java.nio.file`) | **allowed** (ephemeral per run) | MEMFS in the runtime iframe; `sun.nio.fs` patched for Emscripten constants (F1); working directory `/root` (process cwd and `user.dir`) holds the project's data files (F2) | `fileio.spec.mjs`, `datafiles.spec.mjs` (create, append, read, list, walk, copy, move, delete, attributes, temp files, Unicode names, correct exception types) |
+| Read/write files in MEMFS (`java.io`, `java.nio.file`) | **allowed** (ephemeral per run) | MEMFS in the runtime iframe; `sun.nio.fs` patched for Emscripten constants (F1); working directory `/root` (process cwd and `user.dir`) holds the project's data files (F2); new and changed files are listed to the student after the run, read-only (F3) | `fileio.spec.mjs`, `datafiles.spec.mjs`, `outputfiles.spec.mjs` (create, append, read, list, walk, copy, move, delete, attributes, temp files, Unicode names, correct exception types) |
 | `Files.getFileStore`, `Files.probeContentType` | **unsupported** | call macOS-only natives that are not linked → `UnsatisfiedLinkError` | — |
 | `ProcessBuilder` / `Runtime.exec` | **denied** | `posix_spawn` → ENOSYS | probes `process`, `exec` |
 | `System.loadLibrary` / `System.load` | **denied** | no dynamic loader; static symbol table only | probes `loadLibrary`, `load` |

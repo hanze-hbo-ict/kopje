@@ -59,6 +59,13 @@
           <div id="notes"></div>
           <pre id="error" role="alert" hidden></pre>
         </div>
+        <section id="output-files" class="output-files" aria-labelledby="output-files-title" hidden>
+          <div class="output-files-head">
+            <h3 id="output-files-title">Files written · <span id="output-files-count"></span><span id="output-files-note" class="output-files-note"></span></h3>
+            <button id="output-files-toggle" class="icon-button" type="button" aria-expanded="true" aria-controls="output-files-list" aria-label="Hide the file list" data-tooltip="Hide" data-tooltip-pos="top-end"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          </div>
+          <ul id="output-files-list"></ul>
+        </section>
       </section>
     </div>
     <p class="workspace-motto">A few files. Still one idea at a time.</p>
@@ -90,6 +97,18 @@
       <span id="export-count" class="export-count"></span>
       <button id="export-copy" type="button" class="primary">Copy</button>
       <button id="export-close" type="button">Close</button>
+    </div>
+  </dialog>
+  <dialog id="file-viewer" aria-labelledby="viewer-title" aria-describedby="viewer-facts">
+    <h2 id="viewer-title"></h2>
+    <p id="viewer-facts" class="transfer-help"></p>
+    <div id="viewer-body" class="viewer-body"></div>
+    <p id="viewer-message" class="transfer-message" aria-live="polite"></p>
+    <div class="transfer-actions">
+      <button id="viewer-source" type="button" aria-pressed="false" hidden>Source</button>
+      <button id="viewer-add" type="button" hidden>Add to project</button>
+      <button id="viewer-copy" type="button" class="primary" hidden>Copy</button>
+      <button id="viewer-close" type="button">Close</button>
     </div>
   </dialog>
   <footer class="app-footer">

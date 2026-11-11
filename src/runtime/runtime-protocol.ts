@@ -14,6 +14,18 @@ export type RuntimeErrorKind =
   | 'no-main-class' | 'no-main-method' | 'bad-main-class' | 'no-sources'
   | 'compiler-crash' | 'fatal' | 'abort' | 'boot' | 'not-isolated' | 'stack-overflow' | 'worker';
 
+/** A file the program created or changed (PLAN.md §16 F3). */
+export interface OutputFile {
+  /** Relative to the working directory (the project root), or absolute outside it. */
+  path: string;
+  /** Full size in bytes; `bytes` may be shorter when `truncated`. */
+  size: number;
+  bytes: ArrayBuffer;
+  truncated: boolean;
+  /** The file existed before the run (e.g. a project data file the program rewrote). */
+  changed: boolean;
+}
+
 /** Lifecycle and I/O events delivered to JavaEngine.run's callback. */
 export type RuntimeEvent =
   | { kind: 'awaiting-assets'; isolated: boolean }
@@ -31,7 +43,10 @@ export type RuntimeEvent =
   | { kind: 'error'; errorKind: RuntimeErrorKind | string; message: string }
   | { kind: 'stopped' }
   | { kind: 'timeout'; limitMs: number }
-  | { kind: 'log'; message: string };
+  | { kind: 'log'; message: string }
+  /** Sent once at the end of a run that started, before the final event. `stopped`: the
+   *  program was torn down (Stop, timeout, output limit), so files are as they were then. */
+  | { kind: 'files'; files: OutputFile[]; more: number; stopped?: boolean };
 
 export type RunResult =
   | { status: 'exit'; code: number }
@@ -54,7 +69,8 @@ export type HostCommand =
   | { type: 'init'; assets: RuntimeAssets }
   | { type: 'start'; files: SourceMap; mainClass: string; args: string[] }
   | { type: 'stdin'; text: string }
-  | { type: 'eof' };
+  | { type: 'eof' }
+  | { type: 'collect' };
 
 /** Runtime iframe -> parent. */
 export interface HostEventMessage { type: 'event'; event: RuntimeEvent }

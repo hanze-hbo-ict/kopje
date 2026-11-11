@@ -4,6 +4,7 @@ import { JavaConsole } from './console/JavaConsole.ts';
 import { FileExplorer } from './ui/FileExplorer.ts';
 import { createTheme } from './ui/theme.ts';
 import { Transfer } from './ui/Transfer.ts';
+import { OutputFiles } from './console/OutputFiles.ts';
 import { ProjectManager } from './project/ProjectManager.ts';
 import { SessionStore } from './project/SessionStorage.ts';
 import { templateProject, type UiState } from './project/model.ts';
@@ -163,6 +164,9 @@ function onRuntimeEvent(ev: RuntimeEvent) {
     case 'error':
       consoleView.error(ev.message);
       break;
+    case 'files':
+      outputFiles.show(ev);
+      break;
   }
 }
 
@@ -186,6 +190,7 @@ function reportResult(r: RunResult) {
 
 async function run() {
   consoleView.clear();
+  outputFiles.clear();
   if (!project.mainClass) {
     consoleView.error('No class with a main method to run. Add public static void main(String[] args) to a class.');
     return;
@@ -259,6 +264,20 @@ new Transfer(project, {
     consoleView.clear();
   },
 });
+// ── files written by the program (PLAN.md §16 F3) ───────────────────────────
+const outputFiles = new OutputFiles({
+  locked: busy,
+  confirm: (m) => window.confirm(m),
+  exists: (p) => p in project.files,
+  add: (p, text) => {
+    project.saveFile(p, text);
+    // editor.open replaces a cached copy whose text differs; openFile skips the file already shown.
+    if (editor.path === p) editor.open(p, project.source(p));
+    openFile(p);
+  },
+  say: (text) => { $('file-message').textContent = text; },
+});
+
 // Closing the tab loses the project (sessionStorage only survives reloads).
 addEventListener('beforeunload', (e) => {
   if (!project.differsFromTemplate()) return;

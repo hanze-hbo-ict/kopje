@@ -454,3 +454,9 @@ close the writer?"): it shows names, sizes, "empty", bytes. Messages about Kopje
 **Order:** F2 first (F3 needs it to tell changed input from new output). Within F3: text,
 images, SVG and hex; then audio/video; PDF last, after checking it under the CSP and
 cross-origin isolation in every browser.
+
+**Status (2026-11-11):** F2 and F3 done. PDFs open in the browser's viewer (CSP
+`frame-src blob:`), checked by hand in Chrome (new headless), Firefox with pdf.js and
+WebKit; WebKit's viewer can't load its own stylesheet under the CSP, so it shows the
+pages without its toolbar. Browsers without an embedded viewer (`navigator.pdfViewerEnabled`
+false, e.g. phones and Playwright's default headless Chromium and Firefox) get the hex view.

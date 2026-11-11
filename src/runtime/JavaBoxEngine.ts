@@ -8,7 +8,7 @@
 import { validateFiles, isValidMainClass, sanitizeInput } from '../project/paths.ts';
 import { MAX_ARGS, MAX_ARGS_CHARS } from '../project/args.ts';
 import type { JavaEngine } from './JavaEngine.ts';
-import type { HostCommand, RunResult, RuntimeAssets, RuntimeEvent, SourceMap } from './runtime-protocol.ts';
+import type { HostCommand, OutputFile, RunResult, RuntimeAssets, RuntimeEvent, SourceMap } from './runtime-protocol.ts';
 import { RUNTIME_PATH } from './runtime-location.generated.ts';
 
 export interface EngineOptions {
@@ -78,6 +78,28 @@ export const runtimeIsolation = () => (sandboxSupported ? 'sandboxed' : 'same-or
 
 const TERMINAL_ERRORS = new Set(['abort', 'boot', 'fatal', 'not-isolated', 'stack-overflow']);
 
+type FilesEvent = Extract<RuntimeEvent, { kind: 'files' }>;
+/** How long a finished run waits for the frame to list the files it wrote. */
+const COLLECT_TIMEOUT_MS = 2_000;
+const MAX_OUTPUT_FILES = 50;
+const OUTPUT_FILE_LIMIT = 1 << 20;
+const OUTPUT_TOTAL_LIMIT = 5 << 20;
+
+/** The frame runs the student's program: accept only a well-formed, bounded file list. */
+function checkFiles(ev: { files?: unknown; more?: unknown }): FilesEvent | null {
+  if (!Array.isArray(ev.files) || ev.files.length > MAX_OUTPUT_FILES) return null;
+  const files: OutputFile[] = [];
+  let total = 0;
+  for (const f of ev.files as Partial<OutputFile>[]) {
+    if (!f || typeof f.path !== 'string' || !f.path || f.path.length > 4096 || !(f.bytes instanceof ArrayBuffer)) return null;
+    if (typeof f.size !== 'number' || !Number.isSafeInteger(f.size) || f.size < f.bytes.byteLength) return null;
+    if (f.bytes.byteLength > OUTPUT_FILE_LIMIT || (total += f.bytes.byteLength) > OUTPUT_TOTAL_LIMIT) return null;
+    files.push({ path: f.path, size: f.size, bytes: f.bytes, truncated: f.truncated === true, changed: f.changed === true });
+  }
+  const more = typeof ev.more === 'number' && Number.isSafeInteger(ev.more) && ev.more > 0 ? ev.more : 0;
+  return { kind: 'files', files, more };
+}
+
 class RuntimeContext {
   readonly iframe: HTMLIFrameElement;
   readonly ready: Promise<void>;
@@ -90,6 +112,7 @@ class RuntimeContext {
   private readonly listener = (e: MessageEvent) => this.handle(e);
   private readonly runtimeUrl: string;
   private sandboxed: boolean;
+  private onFiles: ((ev: FilesEvent | null) => void) | null = null;
 
   constructor(opts: EngineOptions, onEvent: (ev: RuntimeEvent) => void) {
     this.onEvent = onEvent;
@@ -121,6 +144,7 @@ class RuntimeContext {
     const m = e.data as { type?: unknown; event?: { kind?: unknown } } | null;
     if (!m || m.type !== 'event' || !m.event || typeof m.event.kind !== 'string') return;
     const ev = m.event as RuntimeEvent;
+    if (ev.kind === 'files') { this.onFiles?.(checkFiles(ev)); return; }
     if (ev.kind === 'awaiting-assets') {
       if (this.sandboxed && !ev.isolated) { this.unsandbox(); return; }
       loadAssets(this.runtimeUrl).then(
@@ -156,6 +180,16 @@ class RuntimeContext {
     this.bootTimer = this.startBootTimer();
   }
 
+  /** Ask the frame for the files the program wrote; null if it doesn't answer in time. */
+  collect(timeoutMs: number): Promise<FilesEvent | null> {
+    return new Promise((resolve) => {
+      const done = (ev: FilesEvent | null) => { clearTimeout(timer); this.onFiles = null; resolve(ev); };
+      const timer = setTimeout(() => done(null), timeoutMs);
+      this.onFiles = done;
+      this.send({ type: 'collect' });
+    });
+  }
+
   // An opaque origin can't be named as targetOrigin; the message goes to this frame's window only.
   send(msg: HostCommand) { this.iframe.contentWindow?.postMessage(msg, this.sandboxed ? '*' : location.origin); }
 
@@ -173,6 +207,8 @@ interface ActiveRun {
   onEvent: (ev: RuntimeEvent) => void;
   settle: (r: RunResult) => void;
   finished: boolean;
+  /** The program's main started (so it may have written files). */
+  ran: boolean;
   waiting: boolean;
   startedAt: number;
   waitedMs: number;
@@ -220,7 +256,7 @@ export class JavaBoxEngine implements JavaEngine {
 
     let settle!: (r: RunResult) => void;
     const done = new Promise<RunResult>((r) => { settle = r; });
-    const run: ActiveRun = { onEvent, settle, finished: false, waiting: false, startedAt: 0, waitedMs: 0, waitStart: 0 };
+    const run: ActiveRun = { onEvent, settle, finished: false, ran: false, waiting: false, startedAt: 0, waitedMs: 0, waitStart: 0 };
     this.active = run;
 
     this.ensureSpare();
@@ -257,6 +293,9 @@ export class JavaBoxEngine implements JavaEngine {
     switch (ev.kind) {
       case 'ready':
         return;
+      case 'running':
+        run.ran = true;
+        break;
       case 'waiting-for-input':
         if (!run.waiting) { run.waiting = true; run.waitStart = performance.now(); clearTimeout(run.timer); }
         break;
@@ -283,15 +322,26 @@ export class JavaBoxEngine implements JavaEngine {
     run.onEvent(ev);
   }
 
+  /**
+   * End the run. If the program got as far as main, the frame first lists the files it wrote
+   * (PLAN.md §16 F3); events after this point, such as more output, are ignored.
+   */
   private finish(run: ActiveRun, result: RunResult, finalEvent?: RuntimeEvent) {
     if (run.finished) return;
     run.finished = true;
     clearTimeout(run.timer);
-    if (finalEvent) run.onEvent(finalEvent);
-    run.ctx?.destroy();
-    if (this.active === run) this.active = null;
-    if (this.opts.prewarm) this.ensureSpare();
-    run.settle(result);
+    const ctx = run.ctx;
+    const complete = (files: FilesEvent | null) => {
+      const stopped = result.status === 'stopped' || result.status === 'timeout' || result.status === 'output-limit';
+      if (files && (files.files.length || files.more)) run.onEvent(stopped ? { ...files, stopped } : files);
+      if (finalEvent) run.onEvent(finalEvent);
+      ctx?.destroy();
+      if (this.active === run) this.active = null;
+      if (this.opts.prewarm) this.ensureSpare();
+      run.settle(result);
+    };
+    if (ctx && run.ran) void ctx.collect(COLLECT_TIMEOUT_MS).then(complete);
+    else complete(null);
   }
 
   sendInput(text: string) {

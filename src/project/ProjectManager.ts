@@ -198,6 +198,19 @@ export class ProjectManager {
     return overwritten;
   }
 
+  /**
+   * Create or overwrite one file and make it active, e.g. an output file the student keeps
+   * (PLAN.md §16 F3). Unlike an import it is not added to what Reset returns to.
+   */
+  saveFile(rawPath: string, text: string): string {
+    const path = normalizePath(rawPath);
+    this.project.files = { ...validateFiles({ ...this.project.files, [path]: text }) };
+    this.project.activeFile = path;
+    this.syncHome();
+    this.emit({ type: 'files' });
+    return path;
+  }
+
   /** Back to the last full import, or the starter template when there was none. Clears the arguments. */
   reset() {
     this.load(this.baseline);
