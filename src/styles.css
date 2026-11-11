@@ -233,6 +233,14 @@ button.diag:hover:enabled { background: var(--soft); }
 .project-actions { display: flex; gap: 2px; align-items: center; }
 .project-actions .icon-button { padding: 7px; }
 .project-actions .icon-button svg { width: 18px; height: 18px; }
+/* Instant tooltip (the native title tooltip only appears after a delay). */
+[data-tooltip] { position: relative; }
+[data-tooltip]::after {
+  content: attr(data-tooltip); position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  z-index: 10; padding: 4px 8px; border-radius: 6px; background: var(--ink); color: var(--panel);
+  font-size: 11px; font-weight: 500; white-space: nowrap; pointer-events: none; visibility: hidden;
+}
+[data-tooltip]:hover::after, [data-tooltip]:focus-visible::after { visibility: visible; }
 dialog#transfer, dialog#export {
   width: min(720px, calc(100vw - 32px)); max-height: calc(100dvh - 64px); border: 1px solid var(--line); border-radius: 12px;
   background: var(--panel); color: var(--ink); padding: 18px 20px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
@@ -290,6 +298,8 @@ dialog#export { width: min(900px, calc(100vw - 32px)); }
   .editor-body { flex-direction: column; }
   .files { width: auto; border-right: 0; border-bottom: 1px solid var(--line); flex-direction: row; align-items: center; padding: 6px 7px; gap: 4px; }
   .files-toolbar { padding: 0; order: 2; }
+  /* The toolbar sits at the right edge here: keep its tooltips on screen. */
+  .files-toolbar [data-tooltip]::after { left: auto; right: 0; transform: none; }
   .files-title { display: none; }
   #file-list { display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; padding: 0; flex: 1; scrollbar-width: thin; }
   #file-list li { margin: 0; flex-shrink: 0; display: flex; align-items: center; }

@@ -24,9 +24,9 @@
           <h2 id="filename"><span class="file-dot" aria-hidden="true"></span><span id="filename-text">Main.java</span></h2>
           <div class="run-actions">
             <div class="project-actions" role="group" aria-label="Project">
-              <button id="project-reset" class="icon-button" type="button" aria-label="Reset" title="Reset to the last imported project"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v5h5"/></svg></button>
-              <button id="project-import" class="icon-button" type="button" aria-label="Import" title="Import files (paste)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg></button>
-              <button id="project-export" class="icon-button" type="button" aria-label="Export" title="Export files (copy)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg></button>
+              <button id="project-reset" class="icon-button" type="button" aria-label="Reset to the last imported project" data-tooltip="Reset to the last imported project"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v5h5"/></svg></button>
+              <button id="project-import" class="icon-button" type="button" aria-label="Import files" data-tooltip="Import files"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg></button>
+              <button id="project-export" class="icon-button" type="button" aria-label="Export files" data-tooltip="Export files"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg></button>
             </div>
             <button id="run" class="primary" type="button" data-action="busy" disabled>Loading…</button>
           </div>
@@ -35,9 +35,9 @@
           <nav class="files" aria-label="Project files">
             <div class="files-toolbar">
               <span class="files-title" id="files-title">Files</span>
-              <button id="file-new" class="icon-button" type="button" aria-label="New file" title="New file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
-              <button id="file-rename" class="icon-button" type="button" aria-label="Rename current file (F2)" title="Rename current file (F2)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg></button>
-              <button id="file-delete" class="icon-button" type="button" aria-label="Delete current file" title="Delete current file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+              <button id="file-new" class="icon-button" type="button" aria-label="New file" data-tooltip="New file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+              <button id="file-rename" class="icon-button" type="button" aria-label="Rename current file (F2)" data-tooltip="Rename current file (F2)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg></button>
+              <button id="file-delete" class="icon-button" type="button" aria-label="Delete current file" data-tooltip="Delete current file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
             </div>
             <ul id="file-list" aria-labelledby="files-title"></ul>
             <p id="file-message" class="files-message" aria-live="polite"></p>
