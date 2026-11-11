@@ -154,7 +154,7 @@ export class Transfer {
   // ── reset ───────────────────────────────────────────────────────────────────
   reset() {
     if (this.hooks.locked()) return;
-    const to = this.project.baselineIsTemplate ? 'the example project' : 'the last imported project';
+    const to = this.project.baselineIsTemplate ? 'a new project' : 'the last imported project';
     if (this.project.isModified() && !this.hooks.confirm(`Reset to ${to}? Your changes since then will be lost.`)) return;
     this.hooks.reset();
     this.hooks.say(`Reset to ${to}.`);

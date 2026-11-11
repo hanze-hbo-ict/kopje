@@ -1,4 +1,4 @@
-import { normalizePath, validateFiles, isJavaPath, LIMITS } from './paths.ts';
+import { normalizePath, validateFiles, isJavaPath, pathToClassName, LIMITS } from './paths.ts';
 import { templateProject, type JavaProject } from './model.ts';
 import { findMains, type MainEntry } from './mains.ts';
 import { MAX_ARGS_CHARS } from './args.ts';
@@ -38,6 +38,17 @@ export class ProjectManager {
   get paths(): string[] { return Object.keys(this.project.files).sort((a, b) => a.localeCompare(b)); }
   get activeFile() { return this.project.activeFile; }
   get mainClass() { return this.project.mainClass; }
+  /**
+   * The class Run starts: the selected main class, or, while no class has a main method,
+   * the class named after the first Java file created, so javac still runs and the
+   * launcher reports what is missing, as `java` would. '' when there is no Java file.
+   * Not stored: once a main method appears it is selected as usual.
+   */
+  get runClass(): string {
+    if (this.project.mainClass) return this.project.mainClass;
+    const first = Object.keys(this.project.files).find(isJavaPath);
+    return first ? pathToClassName(first) : '';
+  }
   get args() { return this.project.args; }
   source(path: string) { return this.project.files[path] ?? ''; }
 

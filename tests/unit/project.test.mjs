@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { ProjectManager } from '../../src/project/ProjectManager.ts';
 import { SessionStore } from '../../src/project/SessionStorage.ts';
 import { templateProject } from '../../src/project/model.ts';
+import { exampleProject } from '../fixtures/example-project.mjs';
 
 class MemoryStorage {
   constructor() { this.m = new Map(); this.fail = false; }
@@ -11,15 +12,24 @@ class MemoryStorage {
   removeItem(k) { this.m.delete(k); }
 }
 
-test('template is a two-file package project with example.Main', () => {
+test('the template is one Main.java with only a comment; Run names the class Main', () => {
   const pm = new ProjectManager(templateProject());
+  assert.deepEqual(pm.paths, ['Main.java']);
+  assert.equal(pm.source('Main.java'), '// Write your Java code here\n');
+  assert.equal(pm.mainClass, '');
+  assert.equal(pm.runClass, 'Main');
+  assert.equal(pm.activeFile, 'Main.java');
+});
+
+test('the example fixture finds example.Main, not Calculator', () => {
+  const pm = new ProjectManager(exampleProject());
   assert.deepEqual(pm.paths, ['example/Calculator.java', 'example/Main.java']);
   assert.equal(pm.mainClass, 'example.Main');
   assert.deepEqual(pm.mainCandidates().map((m) => m.className), ['example.Main'], 'Calculator has no main');
 });
 
 test('new files start empty; collisions are rejected', () => {
-  const pm = new ProjectManager(templateProject());
+  const pm = new ProjectManager(exampleProject());
   assert.equal(pm.createFile('util/text/Words.java'), 'util/text/Words.java');
   assert.equal(pm.source('util/text/Words.java'), '');
   assert.equal(pm.activeFile, 'util/text/Words.java');
@@ -30,13 +40,13 @@ test('new files start empty; collisions are rejected', () => {
 });
 
 test('data files are not scanned for main methods', () => {
-  const pm = new ProjectManager(templateProject());
+  const pm = new ProjectManager(exampleProject());
   pm.addFiles({ 'notes.txt': 'public class X { public static void main(String[] a) {} }' });
   assert.deepEqual(pm.mainCandidates().map((m) => m.className), ['example.Main']);
 });
 
 test('rename keeps content, follows main class and active file', () => {
-  const pm = new ProjectManager(templateProject());
+  const pm = new ProjectManager(exampleProject());
   const before = pm.source('example/Main.java');
   pm.renameFile('example/Main.java', 'app/Start.java');
   assert.equal(pm.source('app/Start.java'), before, 'no refactoring');
@@ -47,7 +57,7 @@ test('rename keeps content, follows main class and active file', () => {
 });
 
 test('delete picks a new main class and keeps at least one file', () => {
-  const pm = new ProjectManager(templateProject());
+  const pm = new ProjectManager(exampleProject());
   pm.deleteFile('example/Main.java');
   assert.equal(pm.mainClass, '', 'no class left with a main method');
   assert.equal(pm.activeFile, 'example/Calculator.java');
@@ -57,7 +67,7 @@ test('delete picks a new main class and keeps at least one file', () => {
 test('session store round-trips project and theme', () => {
   const storage = new MemoryStorage();
   const s = new SessionStore(storage);
-  const p = templateProject();
+  const p = exampleProject();
   p.files['x/Y.java'] = 'class Y {}';
   p.activeFile = 'x/Y.java';
   s.save(p, { theme: 'dark' }, true);
@@ -80,7 +90,7 @@ test('session store rejects corrupt or unsafe data and survives quota errors', (
   assert.equal(r.ui.theme, 'system');
   storage.fail = true;
   const s = new SessionStore(storage);
-  s.save(templateProject(), { theme: 'system' }, true);
+  s.save(exampleProject(), { theme: 'system' }, true);
   assert.equal(s.persistent, false);
 });
 
@@ -88,7 +98,7 @@ test('session store without storage works in memory', () => {
   const s = new SessionStore(null);
   assert.equal(s.load(), null);
   assert.equal(s.persistent, false);
-  s.save(templateProject(), { theme: 'light' }, true);
+  s.save(exampleProject(), { theme: 'light' }, true);
 });
 
 test('replaceAll, addFiles, reset, isModified', () => {
@@ -116,16 +126,18 @@ test('replaceAll, addFiles, reset, isModified', () => {
   assert.equal(pm.mainClass, 'q.App');
   assert.equal(pm.args, '');
 
-  const fresh = new ProjectManager(templateProject());
-  fresh.deleteFile('example/Calculator.java');
+  const fresh = new ProjectManager(exampleProject());
+  assert.equal(fresh.isModified(), true, 'differs from the template it would reset to');
   fresh.reset();
   assert.equal(fresh.differsFromTemplate(), false);
-  assert.equal(fresh.mainClass, 'example.Main');
+  assert.deepEqual(fresh.paths, ['Main.java']);
+  assert.equal(fresh.mainClass, '');
+  assert.equal(fresh.activeFile, 'Main.java');
 });
 
 test('the baseline is stored with the project', () => {
   const storage = new MemoryStorage();
-  const pm = new ProjectManager(templateProject());
+  const pm = new ProjectManager(exampleProject());
   pm.replaceAll({ 'A.java': 'public class A { public static void main(String[] a) {} }' });
   pm.setContent('A.java', 'public class A { public static void main(String[] a) { int x; } }');
   new SessionStore(storage).save(pm.snapshot(), { theme: 'system' }, true);
@@ -138,13 +150,13 @@ test('the baseline is stored with the project', () => {
 test('session store clear removes stored state', () => {
   const storage = new MemoryStorage();
   const s = new SessionStore(storage);
-  s.save(templateProject(), { theme: 'dark' }, true);
+  s.save(exampleProject(), { theme: 'dark' }, true);
   s.clear();
   assert.equal(new SessionStore(storage).load(), null);
 });
 
 test('main class follows edits: appears, is renamed in source, survives half-typed edits', () => {
-  const pm = new ProjectManager(templateProject());
+  const pm = new ProjectManager(exampleProject());
   pm.deleteFile('example/Main.java');
   assert.equal(pm.mainClass, '');
   const calc = 'package example;\n\npublic class Calculator {\n    public static void main(String[] args) {}\n}\n';
@@ -162,7 +174,7 @@ test('main class follows edits: appears, is renamed in source, survives half-typ
 
 test('args are stored with the project and capped', () => {
   const storage = new MemoryStorage();
-  const pm = new ProjectManager(templateProject());
+  const pm = new ProjectManager(exampleProject());
   pm.setArgs('3 "two words"');
   const s = new SessionStore(storage);
   s.save(pm.snapshot(), { theme: 'system' }, true);
@@ -171,4 +183,19 @@ test('args are stored with the project and capped', () => {
   assert.equal(pm.args.length, 1000);
   pm.reset();
   assert.equal(pm.args, '');
+});
+
+test('without any main method, Run falls back to the first Java file created', () => {
+  const pm = new ProjectManager(exampleProject());
+  pm.deleteFile('example/Main.java');
+  assert.equal(pm.mainClass, '', 'nothing is stored');
+  assert.equal(pm.runClass, 'example.Calculator');
+  pm.createFile('data/in.txt');
+  pm.createFile('app/Tool.java');
+  assert.equal(pm.runClass, 'example.Calculator', 'first created, not alphabetical; data files skipped');
+  pm.setContent('app/Tool.java', 'package app; public class Tool { public static void main(String[] a) {} }');
+  assert.equal(pm.mainClass, 'app.Tool', 'a real main method is still selected as usual');
+  assert.equal(pm.runClass, 'app.Tool');
+  const data = new ProjectManager({ files: { 'notes.txt': 'x' }, mainClass: '', activeFile: 'notes.txt', args: '' });
+  assert.equal(data.runClass, '');
 });

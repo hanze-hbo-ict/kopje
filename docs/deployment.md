@@ -92,7 +92,7 @@ npm run test:e2e              # test build + all e2e suites in Chromium, Firefox
   ```
   Expect COOP/COEP and the CSP everywhere, `immutable` on the runtime file, `no-cache` on `/`,
   and no `Content-Encoding` on `.gz` files.
-- [ ] Open the site, run the example project (two inputs), press Stop during input, run again.
+- [ ] Open the site, import a small program that reads two lines of input, run it, press Stop during input, run again.
 - [ ] Export (all files) → paste into the target platform (e.g. ans.app) and check the text is exact.
 - [ ] Record the deployed commit, `runtime.lock.json` and the date.
 

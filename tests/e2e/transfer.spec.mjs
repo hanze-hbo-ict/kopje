@@ -1,5 +1,6 @@
 // PLAN.md §14 E1 (export / copy for Ans), E2 (import), E4 (unload warning, Reset).
 import { test, expect } from '@playwright/test';
+import { useExampleProject } from '../fixtures/example-project.mjs';
 
 const UNICODE_SRC = 'package example;\n\npublic class Calculator {\n\t// tab-indented, café €\n\tpublic int add(int a, int b) {\n\t\treturn a + b;\n\t}\n}\n';
 
@@ -18,6 +19,7 @@ const bundle = (files) => Object.keys(files).sort().map((p) => `// File: ${p}\n$
 test('E1: Export copies an exact bundle, or one file as is', async ({ page, context, browserName }) => {
   test.skip(browserName !== 'chromium', 'clipboard permissions are scriptable in Chromium only');
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await useExampleProject(page);
   await page.goto('/');
   await ready(page);
   await page.locator('#file-list button[data-path="example/Calculator.java"]').click();
@@ -57,6 +59,7 @@ test('E1: if the clipboard is refused, the preview is selected for manual copyin
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: () => Promise.reject(new DOMException('denied', 'NotAllowedError')) } });
   });
+  await useExampleProject(page);
   await page.goto('/');
   await ready(page);
   await page.locator('#project-export').click();
@@ -127,16 +130,17 @@ test('E4: Reset returns to the last full import (plus added files); unload warni
   });
   expect(await unloadWarns(), 'no warning for the untouched template').toBe(false);
 
-  // Without an import, Reset goes back to the example project.
+  // Without an import, Reset goes back to a new project: the template's one Main.java.
   await page.locator('#file-new').click();
   await page.locator('.file-name-input').fill('extra/Note.java');
   await page.locator('.file-name-input').press('Enter');
-  await expect(page.locator('#file-list button[data-path]')).toHaveCount(3);
+  await expect(page.locator('#file-list button[data-path]')).toHaveCount(2);
   expect(await unloadWarns()).toBe(true);
   page.once('dialog', (d) => d.accept());
   await page.locator('#project-reset').click();
-  await expect(page.locator('#file-list button[data-path]')).toHaveCount(2);
-  await expect(page.locator('#filename-text')).toHaveText('example/Main.java');
+  await expect(page.locator('#file-message')).toHaveText('Reset to a new project.');
+  await expect(page.locator('#file-list button[data-path]')).toHaveCount(1);
+  await expect(page.locator('#filename-text')).toHaveText('Main.java');
   expect(await unloadWarns()).toBe(false);
 
   // After an import (replace + add), Reset goes back to those files, also after a reload.

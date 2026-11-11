@@ -1,5 +1,6 @@
 // PLAN.md §13: S1 (no attacker-chosen code via URL), S2 (CSP), S7 (framing).
 import { test, expect } from '@playwright/test';
+import { useExampleProject } from '../fixtures/example-project.mjs';
 import { RUNTIME_BASE } from './runtime-path.mjs';
 
 const ATTACKER = 'http://127.0.0.1:5392/';   // a different origin; nothing listens there
@@ -22,6 +23,7 @@ test('S2/S7: security headers on pages, runtime document and assets', async ({ r
 test('S2: the page cannot reach other origins; the IDE still works under the CSP', async ({ page }) => {
   const violations = [];
   page.on('console', (m) => { if (/Content Security Policy|Content-Security-Policy|CSP/i.test(m.text())) violations.push(m.text()); });
+  await useExampleProject(page);
   await page.goto('/');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready', { timeout: 120_000 });
   const blocked = await page.evaluate(async (url) => {

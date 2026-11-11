@@ -47,7 +47,8 @@ let renderedMains = '';
 function renderMainSelect() {
   const candidates = project.mainCandidates();
   const selected = project.mainClass;
-  const key = JSON.stringify([selected, candidates.map((c) => c.className)]);
+  const run = project.runClass;
+  const key = JSON.stringify([selected, run, candidates.map((c) => c.className)]);
   if (key === renderedMains) return;
   renderedMains = key;
   mainSelect.textContent = '';
@@ -55,12 +56,14 @@ function renderMainSelect() {
   if (selected && !candidates.some((c) => c.className === selected)) {
     mainSelect.add(new Option(`${selected.replace(/\$/g, '.')} (no main method)`, selected));
   }
+  // No main method anywhere: offer the first Java file's class, so Run still compiles.
+  if (!selected && run) mainSelect.add(new Option(run, run));
   if (!mainSelect.options.length) {
-    const none = new Option('no main method', '');
+    const none = new Option('no Java files', '');
     none.disabled = true;
     mainSelect.add(none);
   }
-  mainSelect.value = selected;
+  mainSelect.value = selected || run;
 }
 mainSelect.addEventListener('change', () => project.setMainClass(mainSelect.value));
 
@@ -191,18 +194,19 @@ function reportResult(r: RunResult) {
 async function run() {
   consoleView.clear();
   outputFiles.clear();
-  if (!project.mainClass) {
-    consoleView.error('No class with a main method to run. Add public static void main(String[] args) to a class.');
+  const mainClass = project.runClass;
+  if (!mainClass) {
+    consoleView.error('No Java files to run.');
     return;
   }
   const args = checkArgs();
   if (!args) { consoleView.error(argsInput.title); argsInput.focus(); return; }
   store.flush();
-  consoleView.command(formatCommand(project.mainClass, argsInput.value));
+  consoleView.command(formatCommand(mainClass, argsInput.value));
   setState(engineReady ? 'compiling' : 'starting');
   let result: RunResult;
   try {
-    result = await engine.run({ ...project.files }, project.mainClass, onRuntimeEvent, args);
+    result = await engine.run({ ...project.files }, mainClass, onRuntimeEvent, args);
   } catch (err) {
     result = { status: 'error', message: (err as Error).message };
   }

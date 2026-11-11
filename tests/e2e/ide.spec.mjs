@@ -1,5 +1,6 @@
 // Gate 4: the IDE (index.html) end to end, through the UI only.
 import { test, expect } from '@playwright/test';
+import { useExampleProject } from '../fixtures/example-project.mjs';
 import { mkdirSync } from 'node:fs';
 
 const SHOTS = 'test-results/screenshots';
@@ -32,10 +33,11 @@ async function answer(page, text) {
 test('Gate 4: two-file project, stdin, stop, diagnostics, files, reload, fresh session', async ({ page, browser, browserName }) => {
   page.on('dialog', (d) => d.accept());
   await page.setViewportSize({ width: 1440, height: 900 });
+  await useExampleProject(page);
   await page.goto('/');
   await ready(page);
 
-  // Template: two files in package example, main class example.Main.
+  // The example project: two files in package example, main class example.Main.
   await expect(page.locator('#file-list button[data-path]')).toHaveCount(2);
   await expect(page.locator('#main-class')).toHaveValue('example.Main');
   await expect(page.locator('#filename-text')).toHaveText('example/Main.java');
@@ -132,17 +134,19 @@ test('Gate 4: two-file project, stdin, stop, diagnostics, files, reload, fresh s
   await expect(fileButton(page, 'tools/Greeter.java')).toHaveCount(0);
   await expect(page.locator('#main-class')).toHaveValue('example.Main');
 
-  // A fresh, independent browser session starts from the template.
+  // A fresh, independent browser session starts from the template: one Main.java.
   const fresh = await browser.newContext();
   const p2 = await fresh.newPage();
   await p2.goto('/');
-  await expect(p2.locator('#file-list button[data-path]')).toHaveCount(2);
-  await expect(p2.locator('#filename-text')).toHaveText('example/Main.java');
+  await expect(p2.locator('#file-list button[data-path]')).toHaveCount(1);
+  await expect(p2.locator('#filename-text')).toHaveText('Main.java');
+  await expect(p2.locator('.cm-content')).toHaveText('// Write your Java code here');
   await fresh.close();
 });
 
 test('mobile layout and dark theme', async ({ page, browserName }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await useExampleProject(page);
   await page.goto('/');
   await ready(page);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
@@ -164,6 +168,7 @@ test('mobile layout and dark theme', async ({ page, browserName }) => {
 
 test('command line: arguments reach String[] args, Enter runs, echo shows the command', async ({ page }) => {
   page.on('dialog', (d) => d.accept());
+  await useExampleProject(page);
   await page.goto('/');
   await ready(page);
   await setSource(page, 'package example;\n\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println(args.length + " " + String.join("|", args));\n    }\n}\n');
@@ -186,4 +191,32 @@ test('command line: arguments reach String[] args, Enter runs, echo shows the co
   await expect(page.locator('#args')).toHaveValue('1 2');
   await page.locator('#run').click();
   await expect(output(page)).toHaveText('2 1|2\n', { timeout: 60_000 });
+});
+
+test('the template has no main yet: Run compiles, the launcher reports what is missing', async ({ page }) => {
+  await page.goto('/');
+  await ready(page);
+  await expect(page.locator('#file-list button[data-path]')).toHaveCount(1);
+  await expect(page.locator('#main-class option')).toHaveText(['Main']);
+  await expect(page.locator('#main-class')).toHaveValue('Main');
+
+  // Only a comment: nothing named Main to start.
+  await page.locator('#run').click();
+  await expect(page.locator('#command-echo')).toHaveText('$ java Main');
+  await expect(page.locator('#error')).toHaveText('Main class not found: Main', { timeout: 60_000 });
+
+  // A compile error is shown as usual.
+  await setSource(page, 'public class Main {\n    int x = ;\n}\n');
+  await page.locator('#run').click();
+  await expect(page.locator('.diag')).toHaveCount(1, { timeout: 60_000 });
+
+  // Compiles, but has no main method.
+  await setSource(page, 'public class Main {\n}\n');
+  await page.locator('#run').click();
+  await expect(page.locator('#error')).toHaveText('Main has no public static void main(String[] args)', { timeout: 60_000 });
+
+  // A main method is picked up and selected as usual.
+  await setSource(page, 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("hi");\n    }\n}\n');
+  await page.locator('#run').click();
+  await expect(page.locator('#output')).toHaveText('hi\n', { timeout: 60_000 });
 });

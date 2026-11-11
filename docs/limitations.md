@@ -80,9 +80,10 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
 - **Data files** (any name except `.java`/`.class`, PLAN.md §16 F2) are text only; names
   use letters, digits, `_`, `-` and `.`, without spaces or a leading dot. A file can't
   have the same name as a folder (`data` next to `data/x.txt`). New files start empty.
-- **Reset** returns to the last full import (Import → Replace project), including files added
-  since with Import → Add to project, or to the example project if nothing was imported. The
-  import is kept in `sessionStorage` with the files.
+- **Reset** returns to the last full import (Import → Replace project), including files
+  added since with Import → Add to project, or to a new project (one `Main.java` with
+  only a comment) if nothing was imported. The import is kept in `sessionStorage` with
+  the files.
 
 ## Storage and privacy
 

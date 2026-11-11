@@ -1,5 +1,6 @@
 // PLAN.md Phase 5 / §13 S4 (Gate 5): the runtime runs in an opaque-origin sandboxed iframe.
 import { test, expect } from '@playwright/test';
+import { useExampleProject } from '../fixtures/example-project.mjs';
 
 async function setSource(page, text) {
   await page.locator('.cm-content').click();
@@ -10,6 +11,7 @@ async function setSource(page, text) {
 
 test('Gate 5: runtime frame cannot reach IDE DOM, storage or cookies; IDE stays responsive', async ({ page, browserName }) => {
   test.skip(browserName === 'webkit', 'WebKit does not isolate opaque-origin frames; same-origin fallback (tested below)');
+  await useExampleProject(page);
   await page.goto('/');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready', { timeout: 120_000 });
   await page.evaluate(() => { document.cookie = 'ide=secret; SameSite=Strict'; sessionStorage.setItem('probe', 'secret'); });
@@ -56,6 +58,7 @@ test('Gate 5: runtime frame cannot reach IDE DOM, storage or cookies; IDE stays 
 
 test('Phase 5 fallback: without isolation in the sandbox (WebKit), runtimes run same-origin and still work', async ({ page, browserName }) => {
   test.skip(browserName !== 'webkit', 'only WebKit needs the fallback');
+  await useExampleProject(page);
   await page.goto('/');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready', { timeout: 120_000 });
   await expect(page.locator('iframe[title="Java runtime"]')).not.toHaveAttribute('sandbox', /./);

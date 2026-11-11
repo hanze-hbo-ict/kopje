@@ -1,6 +1,7 @@
 // PLAN.md §13 S9: student code can spoof its own status events, but nothing it sends can
 // become markup or script in the IDE.
 import { test, expect } from '@playwright/test';
+import { useExampleProject } from '../fixtures/example-project.mjs';
 
 const PAYLOAD = '<img src=x onerror="window.__pwned=1"><b>bold</b>';
 
@@ -12,6 +13,7 @@ async function setSource(page, text) {
 }
 
 test('S9: spoofed diagnostics and HTML output render as plain text', async ({ page }) => {
+  await useExampleProject(page);
   await page.goto('/');
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'ready', { timeout: 120_000 });
   const json = JSON.stringify({ t: 'compiled', ok: false, ms: 0, diagnostics: [
