@@ -6,7 +6,7 @@
 //   stdout / stderr (Java -> host): per-byte Emscripten devices, forwarded in order
 //   stdin    (host -> Java): append-only MEMFS file /work/stdin, polled by the driver
 //
-// Messages from the parent: {type:'start', files, mainClass} | {type:'stdin', text} | {type:'eof'}
+// Messages from the parent: {type:'start', files, mainClass, args} | {type:'stdin', text} | {type:'eof'}
 // Messages to the parent:   {type:'event', event:{...}}  (see src/runtime/runtime-protocol.ts)
 
 const EOF_BYTE = 0x04;             // driver maps 0x04 to end-of-stream
@@ -148,7 +148,11 @@ addEventListener('message', (e) => {
       FS.mkdirTree(full.slice(0, full.lastIndexOf('/')));
       FS.writeFile(full, text);
     }
-    enqueueStdin(encoder.encode('KOPJE_GO ' + m.mainClass + '\n'));
+    // Each argument travels base64-encoded with a '+' prefix ('+' alone = empty), so
+    // spaces, quotes and non-ASCII text survive the one-line control message.
+    const args = Array.isArray(m.args) ? m.args.filter((a) => typeof a === 'string').slice(0, 100) : [];
+    const b64 = (a) => '+' + btoa(String.fromCharCode(...encoder.encode(a)));
+    enqueueStdin(encoder.encode(['KOPJE_GO', String(m.mainClass), ...args.map(b64)].join(' ') + '\n'));
   } else if (m.type === 'stdin' && started && typeof m.text === 'string') {
     enqueueStdin(encoder.encode(m.text));
   } else if (m.type === 'eof' && started) {

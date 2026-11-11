@@ -15,8 +15,9 @@ import java.util.*;
  *
  * Lifecycle — exactly ONE compile-and-run per JVM:
  *   1. boot, warm up javac, emit {"t":"ready"} on the control channel
- *   2. read ONE line "KOPJE_GO <main.Class>\n" from stdin. Before this line the host
- *      never forwards user input, so the line cannot originate from the user.
+ *   2. read ONE line "KOPJE_GO <main.Class> [+<base64 arg> ...]\n" from stdin. Before this
+ *      line the host never forwards user input, so the line cannot originate from the user.
+ *      Each program argument is its UTF-8 bytes in base64 behind a '+' ("+" = empty).
  *   3. compile every *.java under the source root in one JavaCompiler task (in memory)
  *   4. emit {"t":"compiled",...} with structured diagnostics; stop on failure
  *   5. run main; from here on, stdin belongs entirely to the student program
@@ -207,7 +208,7 @@ public class CompileServer {
             int c = in.read();
             if (c < 0) return b.size() == 0 ? null : b.toString(StandardCharsets.UTF_8);
             if (c == '\n') return b.toString(StandardCharsets.UTF_8);
-            if (b.size() > 1024) throw new IOException("control line too long");
+            if (b.size() > 16384) throw new IOException("control line too long");
             b.write(c);
         }
     }
@@ -352,7 +353,7 @@ public class CompileServer {
         for (Throwable s : t.getSuppressed()) trimTrace(s, seen);
     }
 
-    static int run(Map<String, byte[]> classes, String mainClass) {
+    static int run(Map<String, byte[]> classes, String mainClass, String[] args) {
         StudentClassLoader loader = new StudentClassLoader(classes);
         Method main;
         try {
@@ -372,7 +373,7 @@ public class CompileServer {
         main.setAccessible(true);
         long stackBytes = Long.getLong("kopje.stackKb", 320L) * 1024;
         int[] code = {1};
-        Thread runner = new Thread(null, () -> { code[0] = invokeMain(main, mainClass); }, "main", stackBytes);
+        Thread runner = new Thread(null, () -> { code[0] = invokeMain(main, mainClass, args); }, "main", stackBytes);
         runner.setContextClassLoader(loader);
         runner.start();
         try {
@@ -383,9 +384,9 @@ public class CompileServer {
         return code[0];
     }
 
-    static int invokeMain(Method main, String mainClass) {
+    static int invokeMain(Method main, String mainClass, String[] args) {
         try {
-            main.invoke(null, (Object) new String[0]);
+            main.invoke(null, (Object) args);
             return 0;
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause() != null ? e.getCause() : e;
@@ -428,7 +429,16 @@ public class CompileServer {
             emit("{\"t\":\"fatal\",\"message\":" + q("bad control line") + "}");
             System.exit(70);
         }
-        String mainClass = go.substring("KOPJE_GO ".length()).trim();
+        String[] words = go.substring("KOPJE_GO ".length()).trim().split(" ");
+        String mainClass = words[0];
+        String[] programArgs = new String[words.length - 1];
+        for (int i = 1; i < words.length; i++) {
+            if (!words[i].startsWith("+")) {
+                emit("{\"t\":\"fatal\",\"message\":" + q("bad control line") + "}");
+                System.exit(70);
+            }
+            programArgs[i - 1] = new String(Base64.getDecoder().decode(words[i].substring(1)), StandardCharsets.UTF_8);
+        }
         if (!mainClass.matches("[\\p{L}_$][\\p{L}\\p{N}_$]*(\\.[\\p{L}_$][\\p{L}\\p{N}_$]*)*")) {
             emit("{\"t\":\"error\",\"kind\":\"bad-main-class\",\"message\":" + q("Invalid main class name: " + mainClass) + "}");
             emit("{\"t\":\"exit\",\"code\":1}");
@@ -465,7 +475,7 @@ public class CompileServer {
 
         System.setIn(new ConsoleInput(rawIn, poll, true));
         observeSystemExit();
-        int code = run(outcome.classes, mainClass);
+        int code = run(outcome.classes, mainClass, programArgs);
         emit("{\"t\":\"exit\",\"code\":" + code + "}");
         System.exit(code);
     }

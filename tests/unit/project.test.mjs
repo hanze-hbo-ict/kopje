@@ -15,7 +15,7 @@ test('template is a two-file package project with example.Main', () => {
   const pm = new ProjectManager(templateProject());
   assert.deepEqual(pm.paths, ['example/Calculator.java', 'example/Main.java']);
   assert.equal(pm.mainClass, 'example.Main');
-  assert.equal(pm.mainCandidates()[0].className, 'example.Main');
+  assert.deepEqual(pm.mainCandidates().map((m) => m.className), ['example.Main'], 'Calculator has no main');
 });
 
 test('create derives the package from the folder and rejects collisions', () => {
@@ -33,7 +33,7 @@ test('rename keeps content, follows main class and active file', () => {
   const before = pm.source('example/Main.java');
   pm.renameFile('example/Main.java', 'app/Start.java');
   assert.equal(pm.source('app/Start.java'), before, 'no refactoring');
-  assert.equal(pm.mainClass, 'app.Start');
+  assert.equal(pm.mainClass, 'example.Main', 'class names come from the source, which rename does not change');
   assert.equal(pm.activeFile, 'app/Start.java');
   assert.throws(() => pm.renameFile('app/Start.java', 'example/Calculator.java'), /already exists/);
   assert.equal(pm.renameFile('app/Start.java', 'app/Start.java'), 'app/Start.java');
@@ -42,7 +42,7 @@ test('rename keeps content, follows main class and active file', () => {
 test('delete picks a new main class and keeps at least one file', () => {
   const pm = new ProjectManager(templateProject());
   pm.deleteFile('example/Main.java');
-  assert.equal(pm.mainClass, 'example.Calculator');
+  assert.equal(pm.mainClass, '', 'no class left with a main method');
   assert.equal(pm.activeFile, 'example/Calculator.java');
   assert.throws(() => pm.deleteFile('example/Calculator.java'), /at least one/);
 });
@@ -107,4 +107,34 @@ test('session store clear removes stored state', () => {
   s.save(templateProject(), { theme: 'dark' }, true);
   s.clear();
   assert.equal(new SessionStore(storage).load(), null);
+});
+
+test('main class follows edits: appears, is renamed in source, survives half-typed edits', () => {
+  const pm = new ProjectManager(templateProject());
+  pm.deleteFile('example/Main.java');
+  assert.equal(pm.mainClass, '');
+  const calc = 'package example;\n\npublic class Calculator {\n    public static void main(String[] args) {}\n}\n';
+  pm.setContent('example/Calculator.java', calc);
+  assert.equal(pm.mainClass, 'example.Calculator', 'first main is selected');
+  pm.setContent('example/Calculator.java', calc.replace('class Calculator', 'class Calc'));
+  assert.equal(pm.mainClass, 'example.Calc', 'renamed class is followed');
+  pm.setContent('example/Calculator.java', calc.replace('class Calculator', 'class Calc').replace('String[] args', 'String[] '));
+  assert.equal(pm.mainClass, 'example.Calc', 'selection stays while main is broken');
+  assert.equal(pm.mainCandidates().length, 0);
+  pm.setContent('example/Calculator.java', '');
+  pm.setContent('example/Calculator.java', calc.replace('class Calculator', 'class Sum'));
+  assert.equal(pm.mainClass, 'example.Sum', 'followed even after the file was emptied');
+});
+
+test('args are stored with the project and capped', () => {
+  const storage = new MemoryStorage();
+  const pm = new ProjectManager(templateProject());
+  pm.setArgs('3 "two words"');
+  const s = new SessionStore(storage);
+  s.save(pm.snapshot(), { theme: 'system' }, true);
+  assert.equal(new SessionStore(storage).load().project.args, '3 "two words"');
+  pm.setArgs('x'.repeat(5000));
+  assert.equal(pm.args.length, 1000);
+  pm.reset();
+  assert.equal(pm.args, '');
 });

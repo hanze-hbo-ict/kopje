@@ -8,6 +8,7 @@
 
 import { validateFiles, isValidMainClass } from './paths.ts';
 import type { JavaProject, UiState, ThemeChoice } from './model.ts';
+import { MAX_ARGS_CHARS } from './args.ts';
 
 const KEY = 'kopje:session:v1';
 
@@ -45,7 +46,8 @@ export class SessionStore {
       const mainClass = isValidMainClass(data.project.mainClass) ? data.project.mainClass : '';
       const theme: ThemeChoice = (['system', 'light', 'dark'] as const).includes(data.ui?.theme as ThemeChoice)
         ? (data.ui!.theme as ThemeChoice) : 'system';
-      return { project: { files, activeFile, mainClass }, ui: { theme } };
+      const args = typeof data.project.args === 'string' ? data.project.args.slice(0, MAX_ARGS_CHARS) : '';
+      return { project: { files, activeFile, mainClass, args }, ui: { theme } };
     } catch {
       return null; // corrupt or from an incompatible version: start fresh
     }

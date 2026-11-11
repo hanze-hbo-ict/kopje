@@ -1,11 +1,14 @@
-import { normalizePath, pathToClassName, classNameToPath, validateFiles, LIMITS } from './paths.ts';
-import { looksLikeMain, newFileSource, templateProject, type JavaProject } from './model.ts';
+import { normalizePath, validateFiles, LIMITS } from './paths.ts';
+import { newFileSource, templateProject, type JavaProject } from './model.ts';
+import { findMains, type MainEntry } from './mains.ts';
+import { MAX_ARGS_CHARS } from './args.ts';
 
 export type ProjectChange =
   | { type: 'content'; path: string }
   | { type: 'files' }
   | { type: 'active' }
-  | { type: 'main' };
+  | { type: 'main' }
+  | { type: 'args' };
 
 /** In-memory project model. All path rules live in paths.ts; this enforces uniqueness. */
 export class ProjectManager {
@@ -13,25 +16,38 @@ export class ProjectManager {
   private listeners = new Set<(c: ProjectChange) => void>();
 
   constructor(initial: JavaProject) {
-    this.project = { files: { ...initial.files }, mainClass: initial.mainClass, activeFile: initial.activeFile };
-    if (!this.project.mainClass || !this.exists(classNameToPath(this.project.mainClass))) this.project.mainClass = this.defaultMain();
+    this.project = { files: { ...initial.files }, mainClass: initial.mainClass, activeFile: initial.activeFile, args: initial.args ?? '' };
+    if (!this.findMain(this.project.mainClass)) this.project.mainClass = this.defaultMain();
+    this.syncHome();
   }
 
   onChange(fn: (c: ProjectChange) => void) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   private emit(c: ProjectChange) { for (const fn of this.listeners) fn(c); }
 
-  snapshot(): JavaProject { return { files: { ...this.project.files }, mainClass: this.project.mainClass, activeFile: this.project.activeFile }; }
+  snapshot(): JavaProject { return { ...this.project, files: { ...this.project.files } }; }
   get files(): Readonly<Record<string, string>> { return this.project.files; }
   get paths(): string[] { return Object.keys(this.project.files).sort((a, b) => a.localeCompare(b)); }
   get activeFile() { return this.project.activeFile; }
   get mainClass() { return this.project.mainClass; }
+  get args() { return this.project.args; }
   source(path: string) { return this.project.files[path] ?? ''; }
 
-  /** Classes the user can pick as entry point, likely mains first. */
-  mainCandidates(): { className: string; hasMain: boolean }[] {
-    return this.paths
-      .map((p) => ({ className: pathToClassName(p), hasMain: looksLikeMain(this.project.files[p]) }))
-      .sort((a, b) => Number(b.hasMain) - Number(a.hasMain) || a.className.localeCompare(b.className));
+  /** Classes with a launchable main method, by name. Scans are cached per file text. */
+  mainCandidates(): MainEntry[] {
+    const out: MainEntry[] = [];
+    for (const p of this.paths) {
+      const text = this.project.files[p];
+      let hit = this.mainCache.get(p);
+      if (!hit || hit.text !== text) { hit = { text, mains: findMains(p, text) }; this.mainCache.set(p, hit); }
+      out.push(...hit.mains);
+    }
+    for (const p of this.mainCache.keys()) if (!this.exists(p)) this.mainCache.delete(p);
+    return out.sort((a, b) => a.label.localeCompare(b.label));
+  }
+  private mainCache = new Map<string, { text: string; mains: MainEntry[] }>();
+
+  findMain(className: string): MainEntry | undefined {
+    return className ? this.mainCandidates().find((m) => m.className === className) : undefined;
   }
 
   private exists(path: string) { return Object.prototype.hasOwnProperty.call(this.project.files, path); }
@@ -41,15 +57,43 @@ export class ProjectManager {
     return this.paths.find((p) => p !== except && p.toLowerCase() === key) ?? null;
   }
 
+  /** Prefer a class called Main, then the first in the menu; '' when there is none. */
   private defaultMain(): string {
     const c = this.mainCandidates();
-    return c.length ? c[0].className : '';
+    return (c.find((m) => /(^|[.$])Main$/.test(m.className)) ?? c[0])?.className ?? '';
   }
 
   setContent(path: string, text: string) {
     if (!this.exists(path) || this.project.files[path] === text) return;
     this.project.files[path] = text;
     this.emit({ type: 'content', path });
+    this.followMain(path);
+  }
+
+  /**
+   * After an edit: no main selected yet and one appears -> select it; the selected class
+   * was renamed in the file it was last seen in (it is gone and that file now has exactly
+   * one main) -> follow it. Otherwise the selection stays, so a half-typed edit, even one
+   * that briefly removes every main, doesn't move it.
+   */
+  private followMain(path: string) {
+    let next = this.project.mainClass;
+    const current = this.findMain(next);
+    const here = this.mainCandidates().filter((m) => m.path === path);
+    if (!next) next = this.defaultMain();
+    else if (!current && this.mainHome === path && here.length === 1) next = here[0].className;
+    if (next !== this.project.mainClass) this.setMainClass(next);
+    else if (current) this.mainHome = current.path;
+  }
+  /** File the selected main class was last found in. */
+  private mainHome = '';
+  private syncHome() { this.mainHome = this.findMain(this.project.mainClass)?.path ?? (this.project.mainClass ? this.mainHome : ''); }
+
+  setArgs(args: string) {
+    args = args.slice(0, MAX_ARGS_CHARS);
+    if (args === this.project.args) return;
+    this.project.args = args;
+    this.emit({ type: 'args' });
   }
 
   setActive(path: string) {
@@ -61,6 +105,7 @@ export class ProjectManager {
   setMainClass(name: string) {
     if (name === this.project.mainClass) return;
     this.project.mainClass = name;
+    this.mainHome = this.findMain(name)?.path ?? this.mainHome;
     this.emit({ type: 'main' });
   }
 
@@ -72,7 +117,7 @@ export class ProjectManager {
     if (this.paths.length >= LIMITS.maxFiles) throw new Error(`A project can have at most ${LIMITS.maxFiles} files`);
     this.project.files[path] = newFileSource(path);
     this.project.activeFile = path;
-    if (!this.project.mainClass) this.project.mainClass = pathToClassName(path);
+    this.syncHome();
     this.emit({ type: 'files' });
     return path;
   }
@@ -88,7 +133,8 @@ export class ProjectManager {
     for (const p of Object.keys(this.project.files)) files[p === from ? to : p] = this.project.files[p];
     this.project.files = files;
     if (this.project.activeFile === from) this.project.activeFile = to;
-    if (this.project.mainClass === pathToClassName(from)) this.project.mainClass = pathToClassName(to);
+    // The main class keeps its name: class names come from the source, which isn't refactored.
+    this.syncHome();
     this.emit({ type: 'files' });
     return to;
   }
@@ -96,9 +142,11 @@ export class ProjectManager {
   deleteFile(path: string) {
     if (!this.exists(path)) return;
     if (this.paths.length === 1) throw new Error('A project needs at least one file');
+    const wasMain = this.findMain(this.project.mainClass)?.path === path;
     delete this.project.files[path];
     if (this.project.activeFile === path) this.project.activeFile = this.paths[0];
-    if (this.project.mainClass === pathToClassName(path)) this.project.mainClass = this.defaultMain();
+    if (wasMain || !this.project.mainClass) this.project.mainClass = this.defaultMain();
+    this.syncHome();
     this.emit({ type: 'files' });
   }
 
@@ -110,8 +158,9 @@ export class ProjectManager {
     this.project.files = { ...valid };
     this.project.activeFile = this.paths[0];
     this.project.mainClass = this.defaultMain();
-    const main = classNameToPath(this.project.mainClass);
-    if (main in this.project.files) this.project.activeFile = main;
+    const main = this.findMain(this.project.mainClass);
+    if (main) this.project.activeFile = main.path;
+    this.syncHome();
     this.emit({ type: 'files' });
   }
 
@@ -121,7 +170,8 @@ export class ProjectManager {
     const overwritten = Object.keys(files).filter((p) => p in this.project.files);
     this.project.files = { ...merged };
     this.project.activeFile = Object.keys(files).sort()[0] ?? this.project.activeFile;
-    if (!this.project.mainClass || !(classNameToPath(this.project.mainClass) in this.project.files)) this.project.mainClass = this.defaultMain();
+    if (!this.findMain(this.project.mainClass)) this.project.mainClass = this.defaultMain();
+    this.syncHome();
     this.emit({ type: 'files' });
     return overwritten;
   }
@@ -129,7 +179,8 @@ export class ProjectManager {
   /** Back to the starter template (New project). */
   reset() {
     const t = templateProject();
-    this.project = { files: { ...t.files }, mainClass: t.mainClass, activeFile: t.activeFile };
+    this.project = { ...t, files: { ...t.files } };
+    this.syncHome();
     this.emit({ type: 'files' });
   }
 

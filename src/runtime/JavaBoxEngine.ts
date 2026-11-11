@@ -6,6 +6,7 @@
 //   * after each run a fresh iframe is pre-booted so the next Run skips JVM + javac warm-up
 
 import { validateFiles, isValidMainClass, sanitizeInput } from '../project/paths.ts';
+import { MAX_ARGS, MAX_ARGS_CHARS } from '../project/args.ts';
 import type { JavaEngine } from './JavaEngine.ts';
 import type { HostCommand, RunResult, RuntimeAssets, RuntimeEvent, SourceMap } from './runtime-protocol.ts';
 import { RUNTIME_PATH } from './runtime-location.generated.ts';
@@ -209,11 +210,13 @@ export class JavaBoxEngine implements JavaEngine {
     this.spare = ctx;
   }
 
-  async run(files: SourceMap, mainClass: string, onEvent: (ev: RuntimeEvent) => void): Promise<RunResult> {
+  async run(files: SourceMap, mainClass: string, onEvent: (ev: RuntimeEvent) => void, args: string[] = []): Promise<RunResult> {
     if (this.disposed) throw new Error('Engine disposed');
     if (this.active) throw new Error('A program is already running');
     const valid = validateFiles(files);
     if (!isValidMainClass(mainClass)) throw new Error(`Invalid main class: ${mainClass}`);
+    if (!Array.isArray(args) || args.length > MAX_ARGS || !args.every((a) => typeof a === 'string')) throw new Error('Invalid program arguments');
+    if (args.join(' ').length > MAX_ARGS_CHARS) throw new Error('Program arguments are too long');
 
     let settle!: (r: RunResult) => void;
     const done = new Promise<RunResult>((r) => { settle = r; });
@@ -236,7 +239,7 @@ export class JavaBoxEngine implements JavaEngine {
     if (run.finished) return done; // stopped while booting
     run.startedAt = performance.now();
     this.armTimeout(run);
-    ctx.send({ type: 'start', files: valid, mainClass });
+    ctx.send({ type: 'start', files: valid, mainClass, args: [...args] });
     return done;
   }
 

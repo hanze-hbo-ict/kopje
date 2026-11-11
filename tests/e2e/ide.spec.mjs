@@ -95,6 +95,7 @@ test('Gate 4: two-file project, stdin, stop, diagnostics, files, reload, fresh s
   await expect(fileButton(page, 'tools/Hello.java')).toHaveAttribute('aria-current', 'true');
   await expect(page.locator('.cm-content')).toContainText('package tools;');
   await setSource(page, 'package tools;\n\npublic class Hello {\n    public static void main(String[] args) {\n        System.out.println("Hello from " + new example.Calculator().add(40, 2));\n    }\n}\n');
+  await expect(page.locator('#main-class option')).toHaveText(['example.Main', 'tools.Hello']); // only classes with main()
   await page.locator('#main-class').selectOption('tools.Hello');
   await page.locator('#run').click();
   await expect(output(page)).toHaveText('Hello from 42\n', { timeout: 60_000 });
@@ -106,12 +107,15 @@ test('Gate 4: two-file project, stdin, stop, diagnostics, files, reload, fresh s
   await expect(page.locator('#file-message')).toContainText('may not contain');
   await field.press('Escape');
 
-  // Rename keeps main-class selection in sync; delete removes the file.
+  // Rename changes the file only; the main class keeps the name declared in the source.
   await fileButton(page, 'tools/Hello.java').click();
   await page.locator('#file-rename').click();
   await field.fill('tools/Greeter.java');
   await field.press('Enter');
   await expect(fileButton(page, 'tools/Greeter.java')).toBeVisible();
+  await expect(page.locator('#main-class')).toHaveValue('tools.Hello');
+  // Renaming the class in the source moves the selection with it.
+  await setSource(page, 'package tools;\n\npublic class Greeter {\n    public static void main(String[] args) {\n        System.out.println("Hello from " + new example.Calculator().add(40, 2));\n    }\n}\n');
   await expect(page.locator('#main-class')).toHaveValue('tools.Greeter');
 
   // Reload the tab: files, active file and main class are restored.
@@ -156,4 +160,30 @@ test('mobile layout and dark theme', async ({ page, browserName }) => {
   await expect(output(page)).toContainText('7 + 8 = 15');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark'); // UI state restored
+});
+
+test('command line: arguments reach String[] args, Enter runs, echo shows the command', async ({ page }) => {
+  page.on('dialog', (d) => d.accept());
+  await page.goto('/');
+  await ready(page);
+  await setSource(page, 'package example;\n\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println(args.length + " " + String.join("|", args));\n    }\n}\n');
+  const args = page.locator('#args');
+  await args.fill('3 "two words" café');
+  await args.press('Enter');
+  await expect(output(page)).toHaveText('3 3|two words|café\n', { timeout: 60_000 });
+  await expect(page.locator('#command-echo')).toHaveText('$ java example.Main 3 "two words" café');
+
+  // An unclosed quote is reported instead of running.
+  await args.fill('"oops');
+  await expect(args).toHaveAttribute('aria-invalid', 'true');
+  await page.locator('#run').click();
+  await expect(page.locator('#error')).toContainText('closing " missing');
+
+  // Arguments survive a reload of the tab.
+  await args.fill('1 2');
+  await page.reload();
+  await ready(page);
+  await expect(page.locator('#args')).toHaveValue('1 2');
+  await page.locator('#run').click();
+  await expect(output(page)).toHaveText('2 1|2\n', { timeout: 60_000 });
 });

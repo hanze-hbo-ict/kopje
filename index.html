@@ -23,7 +23,6 @@
         <div class="panel-header">
           <h2 id="filename"><span class="file-dot" aria-hidden="true"></span><span id="filename-text">Main.java</span></h2>
           <div class="run-actions">
-            <label class="main-picker"><span>Main</span><select id="main-class" aria-label="Main class to run"></select></label>
             <button id="run" class="primary" type="button" data-action="busy" disabled>Loading…</button>
           </div>
         </div>
@@ -49,7 +48,13 @@
       </section>
       <section class="panel console-panel" aria-labelledby="console-title">
         <div class="panel-header"><h2 id="console-title">Console</h2><span id="status" role="status" data-state="loading">Starting Java…</span></div>
+        <form id="command-line" class="command-line" aria-label="Command line">
+          <span class="command-prompt" aria-hidden="true">$ java</span>
+          <select id="main-class" aria-label="Main class to run" title="Classes with a public static void main(String[] args)"></select>
+          <input id="args" type="text" autocomplete="off" spellcheck="false" placeholder="arguments" aria-label="Program arguments" title="Program arguments, passed as String[] args. Use quotes for spaces: &quot;two words&quot;">
+        </form>
         <div class="console-body">
+          <p id="command-echo" class="command-echo" hidden></p>
           <div id="transcript"><span id="output" tabindex="0" role="textbox" aria-readonly="true" aria-multiline="true" aria-label="Program output"></span><form id="input-form" hidden><label class="visually-hidden" for="answer">Program input</label><input id="answer" type="text" autocomplete="off" spellcheck="false" aria-describedby="input-help"></form></div>
           <p id="input-help" class="visually-hidden">Enter one line, then press Enter. An empty answer is allowed. Press Control D to end the input.</p>
           <div id="notes"></div>

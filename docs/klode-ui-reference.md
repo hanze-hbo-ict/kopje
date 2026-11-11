@@ -35,7 +35,7 @@ configuration (minus Python), focus treatment, mobile stacking breakpoint, foote
 | Need | Adaptation |
 |---|---|
 | Multiple files and packages | Compact **file list inside the editor panel** (left column, ~190 px) with New / Rename / Delete. Paths are shown as typed (`example/Main.java`). On ≤ 740 px it becomes a horizontal, scrollable strip above the editor. The two-panel grid is kept. |
-| Main class | A labelled `<select>` ("Main") in the editor panel header next to Run, listing classes derived from file paths. Explicit, no auto-discovery. |
+| Main class + arguments | A command line at the top of the console: `$ java [main class ▾] [arguments]`. The menu lists only classes that declare `public static void main(String[])`; the choice stays explicit. Run stays in the editor header; Enter in the arguments field also runs. The command is echoed above the output, like a terminal. |
 | Compile step | Extra status "Compiling…"; **Stop is shown immediately** during compile and run, because javac takes over a second in the interpreter, so the 300 ms reveal would not prevent flicker anyway. |
 | Compiler diagnostics | Shown as a list of buttons under the transcript (`file:line:col message`); activating one opens the file and places the cursor on that line. |
 | stderr and exit status | stderr is shown inline in the transcript in the error colour (preserving interleaving). A non-zero exit, Stop, timeout or output limit adds one muted status line. |

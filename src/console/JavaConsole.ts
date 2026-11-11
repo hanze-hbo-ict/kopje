@@ -12,6 +12,7 @@ export interface ConsoleElements {
   answer: HTMLInputElement; // inline input
   notes: HTMLElement;       // status lines + diagnostics
   error: HTMLElement;       // role=alert
+  command: HTMLElement;     // echo of the command that ran
 }
 
 export class JavaConsole {
@@ -58,6 +59,7 @@ export class JavaConsole {
     this.frame = null;
     this.el.output.textContent = '';
     this.el.notes.textContent = '';
+    this.command('');
     this.error('');
     this.hideInput();
   }
@@ -168,6 +170,12 @@ export class JavaConsole {
     this.el.notes.append(heading, ul);
     this.reveal();
     return ul.querySelector('button');
+  }
+
+  /** Echo of the command that runs, e.g. "$ java example.Main 3". Empty hides it. */
+  command(text: string) {
+    this.el.command.textContent = text ? `$ ${text}` : '';
+    this.el.command.hidden = !text;
   }
 
   error(text: string) {

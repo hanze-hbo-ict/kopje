@@ -8,8 +8,8 @@ import type { RunResult, RuntimeEvent, SourceMap } from './runtime-protocol.ts';
 export interface JavaEngine {
   /** Pre-boot a runtime so the first run does not pay JVM + javac warm-up. */
   initialize(): Promise<void>;
-  /** Compile all files together and run mainClass. One run at a time. */
-  run(files: SourceMap, mainClass: string, onEvent: (event: RuntimeEvent) => void): Promise<RunResult>;
+  /** Compile all files together and run mainClass with `args` as String[] args. One run at a time. */
+  run(files: SourceMap, mainClass: string, onEvent: (event: RuntimeEvent) => void, args?: string[]): Promise<RunResult>;
   /** Deliver text to stdin; the caller appends '\n' per line. Control characters are stripped. */
   sendInput(text: string): void;
   /** Signal end of input (Ctrl+D). */

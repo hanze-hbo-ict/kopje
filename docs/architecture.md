@@ -52,8 +52,9 @@ destroyed.
 
 ## ADR-3 — Channels: control and student input are physically separate (revised)
 
-- **Host → Java control:** exactly one line, `KOPJE_GO <main.Class>\n`, sent before any
-  user input is forwarded. Sources travel through MEMFS (`/work/src/**`), not stdin. After
+- **Host → Java control:** exactly one line, `KOPJE_GO <main.Class> [+<base64> …]\n`, sent
+  before any user input is forwarded. Each program argument is its UTF-8 bytes in base64
+  behind a `+` (`+` alone is an empty argument), so spaces, quotes and non-ASCII survive. Sources travel through MEMFS (`/work/src/**`), not stdin. After
   the GO line every input byte belongs to the program, so user input can't be parsed as a
   command (host test: `student input cannot be parsed as a control command`).
 - **Input transport = append-only MEMFS file `/work/stdin`**, not the upstream fd 0 ring.
@@ -127,12 +128,18 @@ run. On JDK 17 (host tests) the handler never fires and the process simply exits
 
 Klode's two-panel layout, tokens and controls are kept (`docs/klode-ui-reference.md`).
 Additions live *inside* those panels: a file column in the editor panel (a horizontal
-strip at ≤ 740 px), a main-class `<select>` beside Run, and diagnostics and status notes
-below the console transcript. One `EditorView` with one `EditorState` per file, so undo
+strip at ≤ 740 px), Run in the editor header, a command line `$ java [main class ▾]
+[arguments]` at the top of the console (Enter runs; the command is echoed above the output),
+and diagnostics and status notes below the console transcript. The main-class menu lists
+only classes with a launchable `public static void main(String[])`, found by a light scanner
+(`src/project/mains.ts`: skips comments and literals, includes nested types, skips local and
+anonymous classes); the selection follows a class renamed in the source. Arguments are split with
+POSIX shell quoting in `src/project/args.ts` (unsupported shell syntax is an error), and the
+echo uses shell quoting, so it can be pasted into a terminal. One `EditorView` with one `EditorState` per file, so undo
 history and selection survive switching files. `ProjectManager` owns the files and path
-rules and emits changes; `SessionStore` persists `{files, mainClass, activeFile, theme}`:
+rules and emits changes; `SessionStore` persists `{files, mainClass, activeFile, args, theme}`:
 edits are debounced (400 ms), file and UI operations save immediately, and it falls back
-to memory on any storage error. File operations and the main-class picker are locked
+to memory on any storage error. File operations and the command line are locked
 while a program runs; editing is allowed, because each run works on a snapshot of the
 files.
 

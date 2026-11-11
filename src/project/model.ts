@@ -4,6 +4,8 @@ export interface JavaProject {
   /** fully qualified, e.g. example.Main */
   mainClass: string;
   activeFile: string;
+  /** Program arguments as typed on the console's command line (see args.ts). */
+  args: string;
 }
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
@@ -44,6 +46,7 @@ public class Calculator {
     },
     mainClass: 'example.Main',
     activeFile: 'example/Main.java',
+    args: '',
   };
 }
 
@@ -53,9 +56,4 @@ export function newFileSource(path: string): string {
   const name = parts.pop()!;
   const pkg = parts.join('.');
   return `${pkg ? `package ${pkg};\n\n` : ''}public class ${name} {\n\n}\n`;
-}
-
-/** Heuristic for ordering the main-class menu only; the selection itself stays explicit. */
-export function looksLikeMain(source: string): boolean {
-  return /\bstatic\s+(?:public\s+)?void\s+main\s*\(/.test(source) || /\bpublic\s+static\s+void\s+main\s*\(/.test(source);
 }

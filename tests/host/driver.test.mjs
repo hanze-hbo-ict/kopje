@@ -194,3 +194,18 @@ test('blocked in Scanner.nextLine: host kill terminates, next run is clean', asy
   const r = await compileAndRun('default-two-file', 'Main');
   assert.equal(r.stdout, '6 * 7 = 42\n');
 });
+
+test('program arguments arrive as String[] args, exactly (spaces, quotes, empty, Unicode)', async () => {
+  const args = ['3', 'two words', '', 'q"x', 'café €'];
+  const encoded = args.map((a) => '+' + Buffer.from(a, 'utf8').toString('base64')).join(' ');
+  const r = await compileAndRun('args', `Main ${encoded}`);
+  assert.equal(r.stdout, '5\n[3]\n[two words]\n[]\n[q"x]\n[café €]\n');
+  const none = await compileAndRun('args', 'Main');
+  assert.equal(none.stdout, '0\n');
+});
+
+test('a malformed argument in the control line is rejected', async () => {
+  const r = await compileAndRun('args', 'Main notbase64');
+  assert.equal(r.events.some((e) => e.t === 'fatal'), true);
+  assert.equal(r.stdout, '');
+});

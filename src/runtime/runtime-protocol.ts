@@ -52,7 +52,7 @@ export interface RuntimeAssets {
 /** Parent -> runtime iframe. */
 export type HostCommand =
   | { type: 'init'; assets: RuntimeAssets }
-  | { type: 'start'; files: SourceMap; mainClass: string }
+  | { type: 'start'; files: SourceMap; mainClass: string; args: string[] }
   | { type: 'stdin'; text: string }
   | { type: 'eof' };
 

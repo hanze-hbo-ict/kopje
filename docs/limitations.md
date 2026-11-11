@@ -49,9 +49,15 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
   limit is reached first and the run ends with a "StackOverflowError: … deeper than the
   browser allows" message instead of hanging (`correctness.spec.mjs`).
 - **Main method:** classic `public static void main(String[])` only (no JDK 21 preview
-  instance-main).
+  instance-main). The main-class menu is filled by a source scanner, not by javac; unusual
+  code (e.g. a `main` behind a Unicode escape) may be missed. Program arguments follow POSIX
+  shell quoting (`\` escapes, `'…'`, `"…"`), because the field is shown as a `$` prompt. Shell
+  features Kopje lacks (pipes, redirects, `;`, `&`, `$VAR`, `` `…` ``, `#` comments) are
+  rejected with a message instead of passed on as text; globs, braces and `~` aren't
+  expanded. At most 100 arguments / 1000 characters.
 - **Rename is not a refactoring:** renaming `A.java` does not change `class A` or package
-  declarations; javac reports the mismatch.
+  declarations; javac reports the mismatch. The main-class menu shows the name declared in
+  the source, so it keeps showing `A` until the class itself is renamed.
 
 ## Copy and paste
 

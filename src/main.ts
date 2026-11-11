@@ -8,6 +8,7 @@ import { ProjectManager } from './project/ProjectManager.ts';
 import { SessionStore } from './project/SessionStorage.ts';
 import { templateProject, type UiState } from './project/model.ts';
 import { JavaBoxEngine } from './runtime/JavaBoxEngine.ts';
+import { parseArgs, formatCommand } from './project/args.ts';
 import type { CompilerDiagnostic, RunResult, RuntimeEvent } from './runtime/runtime-protocol.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -32,24 +33,57 @@ function openFile(path: string) {
   explorer.render();
 }
 
-// ── main class selector ───────────────────────────────────────────────────────
+// ── command line: main class + arguments ─────────────────────────────────────
 const mainSelect = $<HTMLSelectElement>('main-class');
+let renderedMains = '';
+/** Lists the classes that have a main method; only rebuilt when that list changes. */
 function renderMainSelect() {
   const candidates = project.mainCandidates();
+  const selected = project.mainClass;
+  const key = JSON.stringify([selected, candidates.map((c) => c.className)]);
+  if (key === renderedMains) return;
+  renderedMains = key;
   mainSelect.textContent = '';
-  for (const c of candidates) mainSelect.add(new Option(c.className, c.className));
-  if (project.mainClass && !candidates.some((c) => c.className === project.mainClass)) {
-    mainSelect.add(new Option(`${project.mainClass} (missing)`, project.mainClass));
+  for (const c of candidates) mainSelect.add(new Option(c.label, c.className));
+  if (selected && !candidates.some((c) => c.className === selected)) {
+    mainSelect.add(new Option(`${selected.replace(/\$/g, '.')} (no main method)`, selected));
   }
-  mainSelect.value = project.mainClass;
+  if (!mainSelect.options.length) {
+    const none = new Option('no main method', '');
+    none.disabled = true;
+    mainSelect.add(none);
+  }
+  mainSelect.value = selected;
 }
 mainSelect.addEventListener('change', () => project.setMainClass(mainSelect.value));
+
+const argsInput = $<HTMLInputElement>('args');
+argsInput.value = project.args;
+function checkArgs(): string[] | null {
+  try {
+    const args = parseArgs(argsInput.value);
+    argsInput.removeAttribute('aria-invalid');
+    argsInput.title = argsInput.dataset.help!;
+    return args;
+  } catch (err) {
+    argsInput.setAttribute('aria-invalid', 'true');
+    argsInput.title = (err as Error).message;
+    return null;
+  }
+}
+argsInput.dataset.help = argsInput.title;
+argsInput.addEventListener('input', () => { project.setArgs(argsInput.value); checkArgs(); });
+// Enter on the command line runs, like a terminal.
+$<HTMLFormElement>('command-line').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (runButton.dataset.action === 'run') void run();
+});
 
 // ── console + status ──────────────────────────────────────────────────────────
 const consoleView = new JavaConsole({
   body: document.querySelector('.console-body')!, output: $('output'),
   form: $<HTMLFormElement>('input-form'), answer: $<HTMLInputElement>('answer'),
-  notes: $('notes'), error: $('error'),
+  notes: $('notes'), error: $('error'), command: $('command-echo'),
 });
 
 type AppState = 'loading' | 'ready' | 'starting' | 'compiling' | 'running' | 'waiting-for-input' | 'failed';
@@ -79,6 +113,7 @@ function setState(next: AppState) {
     runButton.prepend(icon, ' ');
   }
   mainSelect.disabled = busy;
+  argsInput.disabled = busy;
   explorer?.render();
 }
 
@@ -142,13 +177,19 @@ function reportResult(r: RunResult) {
 }
 
 async function run() {
-  if (!project.mainClass) { consoleView.clear(); consoleView.error('Choose a main class first.'); return; }
-  store.flush();
   consoleView.clear();
+  if (!project.mainClass) {
+    consoleView.error('No class with a main method to run. Add public static void main(String[] args) to a class.');
+    return;
+  }
+  const args = checkArgs();
+  if (!args) { consoleView.error(argsInput.title); argsInput.focus(); return; }
+  store.flush();
+  consoleView.command(formatCommand(project.mainClass, argsInput.value));
   setState(engineReady ? 'compiling' : 'starting');
   let result: RunResult;
   try {
-    result = await engine.run({ ...project.files }, project.mainClass, onRuntimeEvent);
+    result = await engine.run({ ...project.files }, project.mainClass, onRuntimeEvent, args);
   } catch (err) {
     result = { status: 'error', message: (err as Error).message };
   }
@@ -183,7 +224,8 @@ const explorer: FileExplorer = new FileExplorer(
 );
 
 project.onChange((c) => {
-  if (c.type === 'content') { save(); return; }
+  if (c.type === 'content') { renderMainSelect(); save(); return; }
+  if (c.type === 'args') { save(); return; }
   if (c.type === 'files' || c.type === 'main') renderMainSelect();
   save(true);
 });
@@ -192,6 +234,8 @@ project.onChange((c) => {
 function reopenProject() {
   editor.forgetAll();
   renderMainSelect();
+  argsInput.value = project.args;
+  checkArgs();
   editor.open(project.activeFile, project.source(project.activeFile));
   $('filename-text').textContent = project.activeFile;
   explorer.render();
@@ -224,6 +268,7 @@ createTheme($<HTMLButtonElement>('theme'), ui.theme, (resolved, choice) => {
 
 // ── start ──────────────────────────────────────────────────────────────────────
 renderMainSelect();
+checkArgs();
 openFile(project.activeFile);
 save(true);
 boot();
