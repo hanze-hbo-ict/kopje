@@ -431,3 +431,26 @@ or with `npm run test:e2e`.
 
 **Open question for the exam laptop (owner).** Does the whitelist apply to top-level visits
 only, to subframe navigations, or to all requests? Relevant only if O1 is ever built.
+
+## 16. Data files and program output (2026-11-11)
+
+Exercises with a data file ("read `scores.csv`, write a report") need two things the IDE
+lacks: data files in the project, and a way to see what the program wrote. Programs can
+already read and write files (F1), but every run starts with an empty file system and
+whatever it writes is discarded with the sandbox. Write-back into the project was
+considered and rejected: runs would depend on each other, a program could overwrite the
+student's sources, and edits during a run would conflict. Instead, output is shown and the
+student decides what to keep.
+
+**Principle:** facts only. Kopje never comments on the student's program (no "did you
+close the writer?"): it shows names, sizes, "empty", bytes. Messages about Kopje itself
+(e.g. that files were captured after Stop) are fine.
+
+| ID | Item | Acceptance |
+|---|---|---|
+| F2 | **Data files in the project.** Any file name except `.java`/`.class` is allowed, including names without an extension; path segments use letters, digits, `-`, `_`, `.` (no spaces, no `..`, no leading dot), same length limits as sources. Text only; imported and exported with the `// File:` format. Before each run, data files are copied into the working directory at their project path (working directory = project root, so `data/scores.csv` is `new File("data/scores.csv")`); `.java` sources stay out of it. In the file list they are mixed in by folder with a distinct marker, open as plain text, and are skipped by compilation and the main-class scan. **New file** creates an empty file for every name; the package/class template is dropped. | unit: path rules for data names; import/export round trip with data files; e2e: import a project with `data/scores.csv`, a program reads it with `java.io` and `java.nio.file`; data files never reach javac; new files are empty. |
+| F3 | **Output files in the console.** The sandbox records the file system just before `main` and compares afterwards; every file created or changed anywhere is listed (working-directory files relative, others by full path; project data files only when their content changed). A bar fixed at the bottom of the console, hidden when nothing was written: header `FILES WRITTEN · N` with a collapse toggle, then one line per file with the name left and facts right (`text · 12 lines · 340 B`, `empty`, `binary · 214 B`); at most 3 lines visible (2 on phones), scrolling inside the bar; at most 50 files, then `+ N more`. Cleared when the next run starts; never stored. Clicking a file opens a read-only viewer: valid UTF-8 text with **Copy** and **Add to project** (overwrite after confirmation; not for `.java`), images, SVG as an image with a source toggle, audio/video (no download control), PDF where `navigator.pdfViewerEnabled`, and a hex view for everything else including invalid UTF-8. No Download button (the browser's own save options can't be prevented and are acceptable). Limits 1 MB per file, 5 MB total, beyond that "truncated". After Stop or a timeout the files are snapshotted before the sandbox is removed and the header says `as they were when the program was stopped`. | e2e: text, empty, binary and image output are listed with the right facts; viewer shows text/image/hex; Copy is exact; Add to project adds a data file; Stop captures files; limits and the 50-file cap; nothing listed for programs without file output; CSP allows `blob:` only where needed. |
+
+**Order:** F2 first (F3 needs it to tell changed input from new output). Within F3: text,
+images, SVG and hex; then audio/video; PDF last, after checking it under the CSP and
+cross-origin isolation in every browser.

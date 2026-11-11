@@ -1,4 +1,4 @@
-// Project-relative source path validation (shared by the IDE and the engine).
+// Project-relative path validation for sources and data files (shared by the IDE and the engine).
 
 export const LIMITS = Object.freeze({
   maxFiles: 200,
@@ -8,11 +8,17 @@ export const LIMITS = Object.freeze({
 });
 
 const SEGMENT = /^[A-Za-z_$][A-Za-z0-9_$\-]*$/;
+/** Data file and folder names: no spaces, no leading dot or dash, so never "." or "..". */
+const DATA_SEGMENT = /^[A-Za-z0-9_][A-Za-z0-9_.\-]*$/;
+
+/** True for Java sources; every other project file is a data file (PLAN.md §16 F2). */
+export function isJavaPath(path: string): boolean { return path.endsWith('.java'); }
 
 /**
- * Normalise a user-supplied path to "a/b/C.java" or throw an Error with a
- * user-readable message. Rejects absolute paths, "..", empty segments,
- * backslashes, non-.java files and characters that cannot form a Java name.
+ * Normalise a user-supplied path to "a/b/C.java" (a source) or "data/scores.csv" (a data
+ * file), or throw an Error with a user-readable message. Rejects absolute paths, "..",
+ * empty segments and backslashes. Sources need folder and file names that form Java
+ * names; data files may use letters, digits, "_", "-" and ".", and may not be .class files.
  */
 export function normalizePath(input: unknown): string {
   if (typeof input !== 'string') throw new Error('Path must be a string');
@@ -28,10 +34,18 @@ export function normalizePath(input: unknown): string {
     if (s === '.' || s === '..') throw new Error('Path may not contain "." or ".."');
   }
   const file = segs[segs.length - 1];
-  if (!file.endsWith('.java')) throw new Error('File name must end with .java');
-  const base = file.slice(0, -5);
-  for (const s of [...segs.slice(0, -1), base]) {
-    if (!SEGMENT.test(s)) throw new Error(`"${s}" is not a valid Java name`);
+  if (/\.(java|class)$/i.test(file) && !isJavaPath(file)) {
+    throw new Error(/\.class$/i.test(file) ? 'Compiled .class files cannot be added' : 'Java sources must end with .java (lower case)');
+  }
+  if (isJavaPath(file)) {
+    const base = file.slice(0, -5);
+    for (const s of [...segs.slice(0, -1), base]) {
+      if (!SEGMENT.test(s)) throw new Error(`"${s}" is not a valid Java name`);
+    }
+  } else {
+    for (const s of segs) {
+      if (!DATA_SEGMENT.test(s)) throw new Error(`"${s}": use only letters, digits, "_", "-" and ".", not starting with "." or "-"`);
+    }
   }
   return p;
 }
@@ -54,6 +68,14 @@ export function validateFiles(files: Record<string, unknown>): Record<string, st
     out[p] = text;
   }
   if (total > LIMITS.maxTotalChars) throw new Error('Project is too large');
+  // A data file can't share its name with a folder ("data" and "data/x.txt"): in the
+  // program's working directory one of them would have to be both a file and a folder.
+  for (const key of seen.keys()) {
+    for (let i = key.indexOf('/'); i >= 0; i = key.indexOf('/', i + 1)) {
+      const folder = key.slice(0, i);
+      if (seen.has(folder)) throw new Error(`${seen.get(folder)} is both a file and a folder`);
+    }
+  }
   return out;
 }
 

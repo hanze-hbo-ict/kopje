@@ -8,6 +8,7 @@ import { syntaxHighlighting, indentOnInput, indentUnit, bracketMatching } from '
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { highlighting, editorTheme, themeMode } from './editor-theme.ts';
+import { isJavaPath } from '../project/paths.ts';
 
 /** Marks the line of the diagnostic the user jumped to; cleared on the next edit. */
 const setMarkedLine = StateEffect.define<number | null>();
@@ -55,25 +56,23 @@ export class JavaEditor {
     });
   }
 
+  /** Java sources get highlighting and bracket handling; data files are plain text. */
   private extensions(path: string): Extension[] {
+    const java = isJavaPath(path);
     return [
       editorTheme,
       this.appearance.of(themeMode(this.mode)),
-      javaLanguage,
-      syntaxHighlighting(highlighting),
-      indentOnInput(),
+      ...(java ? [javaLanguage, syntaxHighlighting(highlighting), indentOnInput(), closeBrackets(), bracketMatching()] : []),
       indentUnit.of('    '),
-      closeBrackets(),
-      bracketMatching(),
       lineNumbers(),
       highlightActiveLineGutter(),
       highlightActiveLine(),
       drawSelection(),
       history(),
       markedLine,
-      keymap.of([indentWithTab, ...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap]),
+      keymap.of([indentWithTab, ...(java ? closeBracketsKeymap : []), ...defaultKeymap, ...historyKeymap]),
       EditorView.contentAttributes.of({
-        'aria-label': `${path} Java source`,
+        'aria-label': java ? `${path} Java source` : `${path} text`,
         spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off',
       }),
     ];

@@ -142,11 +142,19 @@ addEventListener('message', (e) => {
     started = true;
     const FS = Module.FS;
     for (const [path, text] of Object.entries(m.files)) {
-      // Paths are validated by the parent (project/paths.js); re-check defensively.
-      if (!/^([A-Za-z0-9_$\-]+\/)*[A-Za-z0-9_$\-]+\.java$/.test(path)) continue;
-      const full = '/work/src/' + path;
-      FS.mkdirTree(full.slice(0, full.lastIndexOf('/')));
-      FS.writeFile(full, text);
+      if (typeof text !== 'string') continue;
+      // Paths are validated by the parent (project/paths.ts); re-check defensively.
+      // Sources go to the compiler's source root; data files (PLAN.md §16 F2) to the
+      // program's working directory (user.dir = /root), so the project root is the
+      // working directory and the sources are not visible there.
+      let full;
+      if (/^([A-Za-z0-9_$\-]+\/)*[A-Za-z0-9_$\-]+\.java$/.test(path)) full = '/work/src/' + path;
+      else if (/^([A-Za-z0-9_][A-Za-z0-9_.\-]*\/)*[A-Za-z0-9_][A-Za-z0-9_.\-]*$/.test(path) && !/\.(java|class)$/i.test(path)) full = '/root/' + path;
+      else continue;
+      try {
+        if (full.lastIndexOf('/') > 0) FS.mkdirTree(full.slice(0, full.lastIndexOf('/')));
+        FS.writeFile(full, text);
+      } catch { /* file/folder clash: rejected by the parent already */ }
     }
     // Each argument travels base64-encoded with a '+' prefix ('+' alone = empty), so
     // spaces, quotes and non-ASCII text survive the one-line control message.
@@ -250,6 +258,10 @@ async function boot(assets) {
       for (const d of ['/tmp', '/tmp/hsperfdata_root', '/root', '/work', '/work/src']) {
         try { FS.mkdir(d); } catch { /* exists */ }
       }
+      // The JVM reports user.dir=/root, but relative paths are resolved by the file system
+      // against the process's working directory, which Emscripten starts at "/". Make them
+      // agree, so "data/scores.csv" is the project's data file (PLAN.md §16 F2).
+      FS.chdir('/root');
       FS.createDevice('/dev', 'jectl', null, ctlByte);
       // Create the file only. Opening a stream here would take fd 0: preRun runs
       // before FS.init() creates the standard streams, shifting stdout/stderr.

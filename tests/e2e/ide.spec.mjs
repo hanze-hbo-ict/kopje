@@ -93,7 +93,7 @@ test('Gate 4: two-file project, stdin, stop, diagnostics, files, reload, fresh s
   await field.fill('tools/Hello.java');
   await field.press('Enter');
   await expect(fileButton(page, 'tools/Hello.java')).toHaveAttribute('aria-current', 'true');
-  await expect(page.locator('.cm-content')).toContainText('package tools;');
+  await expect(page.locator('.cm-content')).toHaveText(''); // new files start empty
   await setSource(page, 'package tools;\n\npublic class Hello {\n    public static void main(String[] args) {\n        System.out.println("Hello from " + new example.Calculator().add(40, 2));\n    }\n}\n');
   await expect(page.locator('#main-class option')).toHaveText(['example.Main', 'tools.Hello']); // only classes with main()
   await page.locator('#main-class').selectOption('tools.Hello');

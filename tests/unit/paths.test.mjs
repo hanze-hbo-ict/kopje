@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizePath, validateFiles, isValidMainClass, pathToClassName, sanitizeInput } from '../../src/project/paths.ts';
+import { normalizePath, validateFiles, isValidMainClass, pathToClassName, sanitizeInput, isJavaPath } from '../../src/project/paths.ts';
 
 test('accepts package-relative paths', () => {
   assert.equal(normalizePath('Main.java'), 'Main.java');
@@ -10,9 +10,28 @@ test('accepts package-relative paths', () => {
 
 test('rejects traversal, absolute, odd names', () => {
   for (const bad of ['../Main.java', 'a/../Main.java', './Main.java', '/abs/Main.java', 'a\\Main.java',
-                     'Main.txt', 'Main', '1bad/Main.java', 'my pkg/Main.java', 'a/.java', '', 'a/b/']) {
+                     '1bad/Main.java', 'my pkg/Main.java', 'a/.java', '', 'a/b/']) {
     assert.throws(() => normalizePath(bad), undefined, bad);
   }
+});
+
+test('data files: any name except .java/.class, a restricted character set', () => {
+  for (const ok of ['scores.csv', 'data/scores.csv', 'input', 'README', 'data-2024/a_b.c.txt', '2024/x.json', 'notes.JSON']) {
+    assert.equal(normalizePath(ok), ok, ok);
+    assert.equal(isJavaPath(ok), false, ok);
+  }
+  for (const bad of ['.hidden', 'data/.env', '-rf', 'my data.txt', 'data/../x.txt', 'café.txt', 'a/b c/x', 'Main.class', 'Main.JAVA', 'Main.Java']) {
+    assert.throws(() => normalizePath(bad), undefined, bad);
+  }
+  assert.throws(() => normalizePath('x/Main.class'), /class files/);
+  assert.throws(() => normalizePath('Main.JAVA'), /lower case/);
+  assert.ok(isJavaPath('a/Main.java'));
+});
+
+test('a file may not share its name with a folder', () => {
+  assert.throws(() => validateFiles({ 'data': '', 'data/x.txt': '' }), /both a file and a folder/);
+  assert.throws(() => validateFiles({ 'Data': '', 'data/x.txt': '' }), /both a file and a folder/);
+  assert.deepEqual(Object.keys(validateFiles({ 'data/x.txt': '', 'data/y.txt': '', 'example/Main.java': '' })).sort(), ['data/x.txt', 'data/y.txt', 'example/Main.java']);
 });
 
 test('rejects duplicates after normalisation (incl. case-folded)', () => {

@@ -54,7 +54,7 @@ destroyed.
 
 - **Host → Java control:** exactly one line, `KOPJE_GO <main.Class> [+<base64> …]\n`, sent
   before any user input is forwarded. Each program argument is its UTF-8 bytes in base64
-  behind a `+` (`+` alone is an empty argument), so spaces, quotes and non-ASCII survive. Sources travel through MEMFS (`/work/src/**`), not stdin. After
+  behind a `+` (`+` alone is an empty argument), so spaces, quotes and non-ASCII survive. Sources travel through MEMFS (`/work/src/**`), not stdin; data files go to the working directory `/root/**` (the host also `chdir`s there, so relative paths match `user.dir`). After
   the GO line every input byte belongs to the program, so user input can't be parsed as a
   command (host test: `student input cannot be parsed as a control command`).
 - **Input transport = append-only MEMFS file `/work/stdin`**, not the upstream fd 0 ring.

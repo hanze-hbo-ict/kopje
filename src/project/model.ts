@@ -52,10 +52,3 @@ public class Calculator {
   };
 }
 
-/** Source for a new file at `path`, with a package declaration matching its folder. */
-export function newFileSource(path: string): string {
-  const parts = path.replace(/\.java$/, '').split('/');
-  const name = parts.pop()!;
-  const pkg = parts.join('.');
-  return `${pkg ? `package ${pkg};\n\n` : ''}public class ${name} {\n\n}\n`;
-}

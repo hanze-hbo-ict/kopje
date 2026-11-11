@@ -2,6 +2,7 @@
 // Keyboard: files are buttons (Tab, Enter); F2 renames, Delete removes the focused file;
 // inline name fields confirm with Enter and cancel with Escape.
 import type { ProjectManager } from '../project/ProjectManager.ts';
+import { isJavaPath } from '../project/paths.ts';
 
 export interface ExplorerElements {
   list: HTMLUListElement;
@@ -73,7 +74,7 @@ export class FileExplorer {
       } else {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = dir ? 'file file-nested' : 'file';
+        b.className = `file${dir ? ' file-nested' : ''}${isJavaPath(path) ? '' : ' file-data'}`;
         b.dataset.path = path;
         b.textContent = path.slice(slash + 1);
         b.setAttribute('aria-label', path);
@@ -93,7 +94,7 @@ export class FileExplorer {
     for (const b of [this.el.newButton, this.el.renameButton, this.el.deleteButton]) b.disabled = locked || this.editing !== null;
     this.el.deleteButton.disabled ||= this.project.paths.length <= 1;
     const field = list.querySelector<HTMLInputElement>('input');
-    if (field) { field.focus(); const dot = field.value.lastIndexOf('.java'); const slash = field.value.lastIndexOf('/') + 1; field.setSelectionRange(slash, dot > slash ? dot : field.value.length); }
+    if (field) { field.focus(); const dot = field.value.lastIndexOf('.'); const slash = field.value.lastIndexOf('/') + 1; field.setSelectionRange(slash, dot > slash ? dot : field.value.length); }
     else if (focusPath) list.querySelector<HTMLButtonElement>(`button[data-path="${CSS.escape(focusPath)}"]`)?.focus();
   }
 
@@ -113,7 +114,7 @@ export class FileExplorer {
     input.value = initial;
     input.spellcheck = false;
     input.autocomplete = 'off';
-    input.setAttribute('aria-label', this.editing?.mode === 'new' ? 'New file path, for example example/Helper.java' : `New path for ${initial}`);
+    input.setAttribute('aria-label', this.editing?.mode === 'new' ? 'New file path, for example example/Helper.java or data/scores.csv' : `New path for ${initial}`);
     input.setAttribute('aria-describedby', this.el.message.id);
     let done = false;
     const commit = () => {

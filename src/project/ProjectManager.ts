@@ -1,5 +1,5 @@
-import { normalizePath, validateFiles, LIMITS } from './paths.ts';
-import { newFileSource, templateProject, type JavaProject } from './model.ts';
+import { normalizePath, validateFiles, isJavaPath, LIMITS } from './paths.ts';
+import { templateProject, type JavaProject } from './model.ts';
 import { findMains, type MainEntry } from './mains.ts';
 import { MAX_ARGS_CHARS } from './args.ts';
 
@@ -45,6 +45,7 @@ export class ProjectManager {
   mainCandidates(): MainEntry[] {
     const out: MainEntry[] = [];
     for (const p of this.paths) {
+      if (!isJavaPath(p)) continue;
       const text = this.project.files[p];
       let hit = this.mainCache.get(p);
       if (!hit || hit.text !== text) { hit = { text, mains: findMains(p, text) }; this.mainCache.set(p, hit); }
@@ -124,7 +125,7 @@ export class ProjectManager {
     const clash = this.collision(path);
     if (clash) throw new Error(`${clash} already exists`);
     if (this.paths.length >= LIMITS.maxFiles) throw new Error(`A project can have at most ${LIMITS.maxFiles} files`);
-    this.project.files[path] = newFileSource(path);
+    this.project.files[path] = '';
     this.project.activeFile = path;
     this.syncHome();
     this.emit({ type: 'files' });

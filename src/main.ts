@@ -9,6 +9,7 @@ import { SessionStore } from './project/SessionStorage.ts';
 import { templateProject, type UiState } from './project/model.ts';
 import { JavaBoxEngine } from './runtime/JavaBoxEngine.ts';
 import { parseArgs, formatCommand } from './project/args.ts';
+import { isJavaPath } from './project/paths.ts';
 import type { CompilerDiagnostic, RunResult, RuntimeEvent } from './runtime/runtime-protocol.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -29,8 +30,13 @@ const editor = new JavaEditor($('editor'), (path, text) => project.setContent(pa
 function openFile(path: string) {
   project.setActive(path);
   if (editor.path !== path) editor.open(path, project.source(path));
-  $('filename-text').textContent = path;
+  showFilename(path);
   explorer.render();
+}
+
+function showFilename(path: string) {
+  $('filename-text').textContent = path;
+  $('filename').dataset.kind = isJavaPath(path) ? 'java' : 'data';
 }
 
 // ── command line: main class + arguments ─────────────────────────────────────
@@ -239,7 +245,7 @@ function reopenProject() {
   argsInput.value = project.args;
   checkArgs();
   editor.open(project.activeFile, project.source(project.activeFile));
-  $('filename-text').textContent = project.activeFile;
+  showFilename(project.activeFile);
   explorer.render();
 }
 new Transfer(project, {

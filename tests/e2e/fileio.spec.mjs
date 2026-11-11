@@ -28,6 +28,8 @@ test('file I/O: java.io and java.nio.file', async ({ page }) => {
   expect(lines['nio.dirNotEmpty']).toBe('OK DirectoryNotEmptyException');
   expect(lines['nio.size']).toBe('OK 16');
   expect(lines['nio.delete']).toBe('OK false');
+  expect(lines['io.relative']).toBe('OK /root/rel.txt');
+  expect(lines['io.relative lands in user.dir']).toBe('OK true');
   expect(lines['nio.outsideRoot']).toBe('OK NoSuchFileException');
   expect(lines['nio.copy']).toBe('OK /tmp/nio/copy.txt');
   expect(lines['nio.listUnicode']).toBe('OK naïve-ü.txt,new.txt');

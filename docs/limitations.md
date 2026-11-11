@@ -24,9 +24,11 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
 ## Java compatibility
 
 - **File I/O works on an ephemeral in-memory filesystem** (`java.io` and `java.nio.file`,
-  `fileio.spec.mjs`). Files exist only during one run; the project's `.java` files are not
-  visible to the program as files (they live in `/work/src`, but the working directory is
-  `/root`). `Files.getFileStore` and `Files.probeContentType` throw `UnsatisfiedLinkError`
+  `fileio.spec.mjs`). Files exist only during one run. The working directory (`/root`) is
+  the project root: the project's data files are copied there before each run, so
+  `data/scores.csv` in the file list is `new File("data/scores.csv")`. The `.java` files
+  are not visible to the program as files (they live in `/work/src`). Files the program
+  writes are discarded with the run. `Files.getFileStore` and `Files.probeContentType` throw `UnsatisfiedLinkError`
   (macOS-only natives). The class library is the macOS one with `sun.nio.fs` recompiled
   against Emscripten's constants (`scripts/build-nio-patch.sh`, ADR-8).
 - **Minimal class library:** `java.base`, `java.logging`, `jdk.compiler` (+ `java.compiler`,
@@ -66,6 +68,9 @@ Evidence for each item is in `docs/baseline.md`, `docs/capability-matrix.md` or 
   line that is exactly `// File: <path>` is read as a new file on import. Importing a single
   class without headers derives its path from `package` and the first top-level type.
 - If the browser refuses the Clipboard API, the export preview is selected for Ctrl+C.
+- **Data files** (any name except `.java`/`.class`, PLAN.md §16 F2) are text only; names
+  use letters, digits, `_`, `-` and `.`, without spaces or a leading dot. A file can't
+  have the same name as a folder (`data` next to `data/x.txt`). New files start empty.
 - **Reset** returns to the last full import (Import → Replace project), including files added
   since with Import → Add to project, or to the example project if nothing was imported. The
   import is kept in `sessionStorage` with the files.

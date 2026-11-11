@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ProjectManager } from '../../src/project/ProjectManager.ts';
 import { SessionStore } from '../../src/project/SessionStorage.ts';
-import { templateProject, newFileSource } from '../../src/project/model.ts';
+import { templateProject } from '../../src/project/model.ts';
 
 class MemoryStorage {
   constructor() { this.m = new Map(); this.fail = false; }
@@ -18,14 +18,21 @@ test('template is a two-file package project with example.Main', () => {
   assert.deepEqual(pm.mainCandidates().map((m) => m.className), ['example.Main'], 'Calculator has no main');
 });
 
-test('create derives the package from the folder and rejects collisions', () => {
+test('new files start empty; collisions are rejected', () => {
   const pm = new ProjectManager(templateProject());
   assert.equal(pm.createFile('util/text/Words.java'), 'util/text/Words.java');
-  assert.equal(pm.source('util/text/Words.java'), 'package util.text;\n\npublic class Words {\n\n}\n');
+  assert.equal(pm.source('util/text/Words.java'), '');
   assert.equal(pm.activeFile, 'util/text/Words.java');
+  assert.equal(pm.createFile('data/scores.csv'), 'data/scores.csv');
+  assert.equal(pm.source('data/scores.csv'), '');
   assert.throws(() => pm.createFile('example/main.java'), /already exists/);
   assert.throws(() => pm.createFile('../x.java'));
-  assert.equal(newFileSource('Top.java'), 'public class Top {\n\n}\n');
+});
+
+test('data files are not scanned for main methods', () => {
+  const pm = new ProjectManager(templateProject());
+  pm.addFiles({ 'notes.txt': 'public class X { public static void main(String[] a) {} }' });
+  assert.deepEqual(pm.mainCandidates().map((m) => m.className), ['example.Main']);
 });
 
 test('rename keeps content, follows main class and active file', () => {

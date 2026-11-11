@@ -36,3 +36,10 @@ test('rejects unsafe or ambiguous bundles', () => {
   assert.throws(() => parseBundle('stray\n// File: A.java\na\n'), /before the first/);
   assert.throws(() => parseBundle('// File: A.java\na\n// File: a.java\nb\n'), /Duplicate/);
 });
+
+test('data files round trip through the bundle format', () => {
+  const files = { 'data/scores.csv': 'name,score\nAna,8\nBo,6\n', 'input': 'no trailing newline', 'Main.java': 'public class Main {}\n' };
+  const paths = Object.keys(files).sort();
+  assert.deepEqual(plain(parseBundle(serializeProject(files, paths))), files);
+  assert.throws(() => parseBundle('// File: data/my scores.csv\nx\n'), /letters, digits/);
+});

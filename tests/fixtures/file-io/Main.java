@@ -30,6 +30,8 @@ public class Main {
         check("io.renameTo", () -> String.valueOf(new File("/tmp/io/b.txt").renameTo(new File("/tmp/io/c.txt"))));
         check("io.delete", () -> String.valueOf(new File("/tmp/io/c.txt").delete()));
         check("io.relative", () -> { try (FileWriter w = new FileWriter("rel.txt")) { w.write("r"); } return new File("rel.txt").getAbsolutePath(); });
+        // Relative paths must land where getAbsolutePath says (process cwd = user.dir).
+        check("io.relative lands in user.dir", () -> String.valueOf(new File("/root/rel.txt").exists()));
 
         Path n = Paths.get("/tmp/nio");
         check("nio.createDirectories", () -> Files.createDirectories(n).toString());
