@@ -161,6 +161,7 @@ main { padding-top: 22px; padding-bottom: 24px; }
 }
 .app-footer a { color: inherit; text-underline-offset: 3px; border-radius: 3px; }
 .app-footer a:hover { color: var(--ink); }
+.footer-licences { margin-left: auto; }
 #run[data-action='run'] { background: var(--run-bg); border-color: var(--run-bg); color: var(--run-ink); }
 #run[data-action='run']:hover:enabled { background: var(--run-hover); border-color: var(--run-hover); }
 #run[data-action='stop'] { background: var(--stop-bg); border-color: var(--stop-bg); color: var(--stop-ink); }
