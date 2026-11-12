@@ -219,4 +219,9 @@ test('the template has no main yet: Run compiles, the launcher reports what is m
   await setSource(page, 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("hi");\n    }\n}\n');
   await page.locator('#run').click();
   await expect(page.locator('#output')).toHaveText('hi\n', { timeout: 60_000 });
+
+  // Losing the only main method keeps the plain class name in the dropdown.
+  await setSource(page, 'public class Main {\n}\n');
+  await expect(page.locator('#main-class option')).toHaveText(['Main']);
+  await expect(page.locator('#main-class')).toHaveValue('Main');
 });

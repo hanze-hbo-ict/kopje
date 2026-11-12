@@ -57,7 +57,10 @@ function renderMainSelect() {
   mainSelect.textContent = '';
   for (const c of candidates) mainSelect.add(new Option(c.label, c.className));
   if (selected && !candidates.some((c) => c.className === selected)) {
-    mainSelect.add(new Option(`${selected.replace(/\$/g, '.')} (no main method)`, selected));
+    // Only flag it when there are other classes to pick instead; if the last main
+    // went away, keep showing the plain name (Run then reports what is missing).
+    const name = selected.replace(/\$/g, '.');
+    mainSelect.add(new Option(candidates.length ? `${name} (no main method)` : name, selected));
   }
   // No main method anywhere: offer the first Java file's class, so Run still compiles.
   if (!selected && run) mainSelect.add(new Option(run, run));
