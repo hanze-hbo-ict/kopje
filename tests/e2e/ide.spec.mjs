@@ -225,3 +225,32 @@ test('the template has no main yet: Run compiles, the launcher reports what is m
   await expect(page.locator('#main-class option')).toHaveText(['Main']);
   await expect(page.locator('#main-class')).toHaveValue('Main');
 });
+
+test('copy buttons: the editor copies the file, the console copies the output', async ({ page }) => {
+  // Capture clipboard writes (real clipboard access differs per browser in headless mode).
+  await page.addInitScript(() => {
+    window.copied = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async (text) => { window.copied.push(text); } },
+    });
+  });
+  await page.goto('/');
+  await ready(page);
+  const source = 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("hi");\n    }\n}\n';
+  await setSource(page, source);
+
+  // Nothing in the console yet: no console copy button.
+  await expect(page.locator('#console-copy')).toBeHidden();
+  await page.locator('#editor-copy').click();
+  await expect(page.locator('#editor-copy')).toHaveAttribute('data-copy-state', 'copied');
+  await expect(page.locator('#editor-copy')).toHaveAttribute('data-tooltip', 'Copied');
+  await expect(page.locator('#editor-copy')).not.toHaveAttribute('data-copy-state', /./, { timeout: 3000 });
+  await expect(page.locator('#editor-copy')).toHaveAttribute('data-tooltip', 'Copy file');
+
+  await page.locator('#run').click();
+  await expect(output(page)).toHaveText('hi\n', { timeout: 60_000 });
+  await page.locator('#console-copy').click();
+  await expect(page.locator('#console-copy')).toHaveAttribute('data-copy-state', 'copied');
+  expect(await page.evaluate(() => window.copied)).toEqual([source, 'hi\n']);
+});

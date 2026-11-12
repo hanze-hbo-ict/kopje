@@ -5,6 +5,7 @@ import { FileExplorer } from './ui/FileExplorer.ts';
 import { createTheme } from './ui/theme.ts';
 import { Transfer } from './ui/Transfer.ts';
 import { OutputFiles } from './console/OutputFiles.ts';
+import { addCopyButton } from './ui/CopyButton.ts';
 import { ProjectManager } from './project/ProjectManager.ts';
 import { SessionStore } from './project/SessionStorage.ts';
 import { templateProject, type UiState } from './project/model.ts';
@@ -37,6 +38,8 @@ function openFile(path: string) {
   showFilename(path);
   explorer.render();
 }
+
+addCopyButton($('editor-wrap'), 'editor-copy', 'Copy file', () => project.source(project.activeFile));
 
 function showFilename(path: string) {
   $('filename-text').textContent = path;
@@ -101,6 +104,21 @@ const consoleView = new JavaConsole({
   form: $<HTMLFormElement>('input-form'), answer: $<HTMLInputElement>('answer'),
   notes: $('notes'), error: $('error'), command: $('command-echo'),
 });
+
+// Copies the console as it reads, minus the command echo: output and typed input, then notes and errors.
+const consoleText = () => {
+  const parts = [$('output'), $('notes'), $('error')]
+    .filter((el) => !el.hidden)
+    .map((el) => (el.id === 'output' ? el.textContent! : el.innerText).replace(/\n$/, ''))
+    .filter((t) => t);
+  return parts.length ? parts.join('\n') + '\n' : '';
+};
+const consoleCopy = addCopyButton($('console-wrap'), 'console-copy', 'Copy output', consoleText);
+const syncConsoleCopy = () => { consoleCopy.hidden = !consoleText(); };
+new MutationObserver(syncConsoleCopy).observe(document.querySelector('.console-body')!, {
+  childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden'],
+});
+syncConsoleCopy();
 
 type AppState = 'loading' | 'ready' | 'starting' | 'compiling' | 'running' | 'waiting-for-input' | 'failed';
 const LABELS: Record<AppState, string> = {

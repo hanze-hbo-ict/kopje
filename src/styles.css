@@ -246,6 +246,11 @@ button.diag:hover:enabled { background: var(--soft); }
 }
 [data-tooltip]:hover::after, [data-tooltip]:focus-visible::after { visibility: visible; }
 [data-tooltip-pos='top-end']::after { top: auto; bottom: calc(100% + 6px); left: auto; right: 0; transform: none; }
+/* Copy buttons in the bottom-right corner of the editor and the console (as in Krash). */
+.copy-wrap { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.copy-button { position: absolute; z-index: 5; right: 22px; bottom: 18px; width: 28px; height: 28px; }
+.copy-button:hover:enabled { background: var(--soft); }
+.copy-button svg { width: 16px; height: 16px; }
 dialog#transfer, dialog#export, dialog#file-viewer {
   width: min(720px, calc(100vw - 32px)); max-height: calc(100dvh - 64px); border: 1px solid var(--line); border-radius: 12px;
   background: var(--panel); color: var(--ink); padding: 18px 20px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);

@@ -43,7 +43,7 @@
             <ul id="file-list" aria-labelledby="files-title"></ul>
             <p id="file-message" class="files-message" aria-live="polite"></p>
           </nav>
-          <div id="editor"></div>
+          <div id="editor-wrap" class="copy-wrap"><div id="editor"></div></div>
         </div>
       </section>
       <section class="panel console-panel" aria-labelledby="console-title">
@@ -53,12 +53,14 @@
           <select id="main-class" aria-label="Main class to run" title="Classes with a public static void main(String[] args)"></select>
           <input id="args" type="text" autocomplete="off" spellcheck="false" placeholder="arguments" aria-label="Program arguments" title="Program arguments, passed as String[] args. Use quotes for spaces: &quot;two words&quot;">
         </form>
-        <div class="console-body">
-          <p id="command-echo" class="command-echo" hidden></p>
-          <div id="transcript"><span id="output" tabindex="0" role="textbox" aria-readonly="true" aria-multiline="true" aria-label="Program output"></span><form id="input-form" hidden><label class="visually-hidden" for="answer">Program input</label><input id="answer" type="text" autocomplete="off" spellcheck="false" aria-describedby="input-help"></form></div>
-          <p id="input-help" class="visually-hidden">Enter one line, then press Enter. An empty answer is allowed. Press Control D to end the input.</p>
-          <div id="notes"></div>
-          <pre id="error" role="alert" hidden></pre>
+        <div id="console-wrap" class="copy-wrap">
+          <div class="console-body">
+            <p id="command-echo" class="command-echo" hidden></p>
+            <div id="transcript"><span id="output" tabindex="0" role="textbox" aria-readonly="true" aria-multiline="true" aria-label="Program output"></span><form id="input-form" hidden><label class="visually-hidden" for="answer">Program input</label><input id="answer" type="text" autocomplete="off" spellcheck="false" aria-describedby="input-help"></form></div>
+            <p id="input-help" class="visually-hidden">Enter one line, then press Enter. An empty answer is allowed. Press Control D to end the input.</p>
+            <div id="notes"></div>
+            <pre id="error" role="alert" hidden></pre>
+          </div>
         </div>
         <section id="output-files" class="output-files" aria-labelledby="output-files-title" hidden>
           <div class="output-files-head">
