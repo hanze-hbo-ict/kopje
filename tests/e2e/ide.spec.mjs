@@ -166,7 +166,7 @@ test('mobile layout and dark theme', async ({ page, browserName }) => {
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark'); // UI state restored
 });
 
-test('command line: arguments reach String[] args, Enter runs, echo shows the command', async ({ page }) => {
+test('command line: arguments reach String[] args, Enter runs', async ({ page }) => {
   page.on('dialog', (d) => d.accept());
   await useExampleProject(page);
   await page.goto('/');
@@ -176,7 +176,6 @@ test('command line: arguments reach String[] args, Enter runs, echo shows the co
   await args.fill('3 "two words" café');
   await args.press('Enter');
   await expect(output(page)).toHaveText('3 3|two words|café\n', { timeout: 60_000 });
-  await expect(page.locator('#command-echo')).toHaveText('$ java example.Main 3 "two words" café');
 
   // An unclosed quote is reported instead of running.
   await args.fill('"oops');
@@ -202,7 +201,6 @@ test('the template has no main yet: Run compiles, the launcher reports what is m
 
   // Only a comment: nothing named Main to start.
   await page.locator('#run').click();
-  await expect(page.locator('#command-echo')).toHaveText('$ java Main');
   await expect(page.locator('#error')).toHaveText('Main class not found: Main', { timeout: 60_000 });
 
   // A compile error is shown as usual.

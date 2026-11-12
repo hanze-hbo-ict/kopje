@@ -64,9 +64,3 @@ export function parseArgs(line: string): string[] {
   if (out.length > MAX_ARGS) throw new Error(`Too many arguments (max ${MAX_ARGS})`);
   return out;
 }
-
-/** The command as echoed in the console: the arguments exactly as typed, only trimmed. */
-export function formatCommand(mainClass: string, argsLine: string): string {
-  const typed = argsLine.trim();
-  return `java ${mainClass}${typed ? ` ${typed}` : ''}`;
-}

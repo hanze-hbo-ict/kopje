@@ -10,7 +10,7 @@ import { ProjectManager } from './project/ProjectManager.ts';
 import { SessionStore } from './project/SessionStorage.ts';
 import { templateProject, type UiState } from './project/model.ts';
 import { JavaBoxEngine } from './runtime/JavaBoxEngine.ts';
-import { parseArgs, formatCommand } from './project/args.ts';
+import { parseArgs } from './project/args.ts';
 import { isJavaPath } from './project/paths.ts';
 import type { CompilerDiagnostic, RunResult, RuntimeEvent } from './runtime/runtime-protocol.ts';
 
@@ -102,10 +102,10 @@ $<HTMLFormElement>('command-line').addEventListener('submit', (e) => {
 const consoleView = new JavaConsole({
   body: document.querySelector('.console-body')!, output: $('output'),
   form: $<HTMLFormElement>('input-form'), answer: $<HTMLInputElement>('answer'),
-  notes: $('notes'), error: $('error'), command: $('command-echo'),
+  notes: $('notes'), error: $('error'),
 });
 
-// Copies the console as it reads, minus the command echo: output and typed input, then notes and errors.
+// Copies the console as it reads: output and typed input, then notes and errors.
 const consoleText = () => {
   const parts = [$('output'), $('notes'), $('error')]
     .filter((el) => !el.hidden)
@@ -226,7 +226,6 @@ async function run() {
   const args = checkArgs();
   if (!args) { consoleView.error(argsInput.title); argsInput.focus(); return; }
   store.flush();
-  consoleView.command(formatCommand(mainClass, argsInput.value));
   setState(engineReady ? 'compiling' : 'starting');
   let result: RunResult;
   try {

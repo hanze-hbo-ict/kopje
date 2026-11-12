@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { findMains } from '../../src/project/mains.ts';
-import { parseArgs, formatCommand } from '../../src/project/args.ts';
+import { parseArgs } from '../../src/project/args.ts';
 
 const names = (path, src) => findMains(path, src).map((m) => m.className);
 
@@ -76,10 +76,4 @@ test('shell features Kopje lacks are rejected, not silently passed on', () => {
   ]) assert.throws(() => parseArgs(line), re, line);
   assert.deepEqual(parseArgs(`'a | b' \\> "x;y" '$HOME' \\$1`), ['a | b', '>', 'x;y', '$HOME', '$1'], 'quoted or escaped they are text');
   assert.throws(() => parseArgs('x'.repeat(1001)), /too long/);
-});
-
-test('the echoed command shows the arguments as typed', () => {
-  const typed = `  3 "two words" '' it\\'s  'a\\b' café  `;
-  assert.equal(formatCommand('p.Main', typed), `java p.Main 3 "two words" '' it\\'s  'a\\b' café`);
-  assert.equal(formatCommand('p.Main', '   '), 'java p.Main');
 });
