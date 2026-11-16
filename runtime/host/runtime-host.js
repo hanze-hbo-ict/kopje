@@ -306,7 +306,7 @@ import(${JSON.stringify(moduleUrl)}).then(() => {
 async function boot(assets) {
   // Feature check rather than crossOriginIsolated: WebKit reports false in an opaque-origin
   // frame although SharedArrayBuffer and shared WASM memory work there.
-  if (typeof SharedArrayBuffer !== 'function') { post({ kind: 'error', errorKind: 'not-isolated', message: 'SharedArrayBuffer unavailable: COOP/COEP headers missing' }); return; }
+  if (typeof SharedArrayBuffer !== 'function') { post({ kind: 'error', errorKind: 'not-isolated', message: 'SharedArrayBuffer is unavailable in the runtime frame' }); return; }
   const t0 = performance.now();
   const driverFiles = assets.driver.map(([name, bytes]) => [name, new Uint8Array(bytes)]);
   // The module runs from a Blob URL; the same URL starts its pthread Workers.

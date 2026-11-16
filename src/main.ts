@@ -10,6 +10,7 @@ import { ProjectManager } from './project/ProjectManager.ts';
 import { SessionStore } from './project/SessionStorage.ts';
 import { templateProject, type UiState } from './project/model.ts';
 import { JavaBoxEngine } from './runtime/JavaBoxEngine.ts';
+import { isolationReport } from './runtime/environment.ts';
 import { parseArgs } from './project/args.ts';
 import { isJavaPath } from './project/paths.ts';
 import type { CompilerDiagnostic, RunResult, RuntimeEvent } from './runtime/runtime-protocol.ts';
@@ -164,7 +165,13 @@ function boot() {
     (err: Error) => {
       if (state !== 'loading') return;
       setState('failed');
-      consoleView.error(`Java could not start: ${err.message}${crossOriginIsolated ? '' : '\nThis page must be served with Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers.'}`);
+      const message = `Java could not start: ${err.message}`;
+      consoleView.error(message);
+      if (!crossOriginIsolated) {
+        isolationReport().then((report) => {
+          if (state === 'failed') consoleView.error(`${message}\nThis page is not cross-origin isolated (needed for SharedArrayBuffer).\n${report}`);
+        });
+      }
     },
   );
 }
