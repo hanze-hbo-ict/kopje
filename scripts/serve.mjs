@@ -20,9 +20,11 @@ createServer((req, res) => {
   if (p === '' || p === '.') p = 'index.html';
   const file = join(root, p);
   if (!(file + sep).startsWith(root + sep) && file !== root) { res.writeHead(403).end(); return; }
-  let st;
-  try { st = statSync(file); } catch { res.writeHead(404).end('not found'); return; }
-  if (st.isDirectory()) { res.writeHead(404).end(); return; }
+  let st, served = file;
+  try {
+    st = statSync(served);
+    if (st.isDirectory()) st = statSync(served = join(served, 'index.html'));   // e.g. /diagnostics/
+  } catch { res.writeHead(404).end('not found'); return; }
   const etag = `"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`;
   const headers = { ...SECURITY_HEADERS, 'Cache-Control': cacheControlFor(url.pathname), ETag: etag };
   if (isRuntimePath(url.pathname)) {
@@ -32,7 +34,7 @@ createServer((req, res) => {
     headers['Access-Control-Allow-Origin'] = RUNTIME_EXTRA['Access-Control-Allow-Origin'];
   }
   if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers).end(); return; }
-  res.writeHead(200, { ...headers, 'Content-Type': TYPES[extname(file)] || 'application/octet-stream', 'Content-Length': st.size });
+  res.writeHead(200, { ...headers, 'Content-Type': TYPES[extname(served)] || 'application/octet-stream', 'Content-Length': st.size });
   if (req.method === 'HEAD') { res.end(); return; }
-  createReadStream(file).pipe(res);
+  createReadStream(served).pipe(res);
 }).listen(port, '127.0.0.1', () => console.log(`serving ${root} on http://localhost:${port} (production headers)`));
