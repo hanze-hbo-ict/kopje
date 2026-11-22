@@ -42,6 +42,8 @@ static host that can set those headers works (not GitHub Pages); `dist/` is the 
 deployment. `.github/workflows/deploy.yml` builds it and deploys to Cloudflare Pages; see
 `docs/deployment.md`. Production
 builds contain no test pages; `npm run build:test` adds `slice.html` for the e2e suite.
+`/diagnostics/` is a static diagnostics page for environments where Java does not start; see
+`docs/deployment.md`.
 
 ## Tests
 

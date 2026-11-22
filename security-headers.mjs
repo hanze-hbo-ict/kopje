@@ -70,5 +70,14 @@ export function headersFile() {
     block('/runtime/*', { 'Cache-Control': IMMUTABLE, ...RUNTIME_EXTRA }),
     block('/', { 'Cache-Control': REVALIDATE, ...CORP_APP }),
     block('/index.html', { 'Cache-Control': REVALIDATE, ...CORP_APP }),
+    ...DIAGNOSTICS_RULES.map(({ path, remove, add }) => [path, ...remove.map((k) => `  ! ${k}`), ...Object.entries(add).map(([k, v]) => `  ${k}: ${v}`)].join('\n')),
   ].join('\n\n') + '\n';
 }
+
+/** Comparison pages of the diagnostics page (public/diagnostics/README.md). Only the isolation
+ *  headers differ from every other path; `! Name` removes a header set by the `/*` rule. Only the
+ *  hosts apply these: `vite preview` and scripts/serve.mjs send the normal headers everywhere. */
+export const DIAGNOSTICS_RULES = [
+  { path: '/diagnostics/credentialless/*', remove: ['Cross-Origin-Embedder-Policy'], add: { 'Cross-Origin-Embedder-Policy': 'credentialless' } },
+  { path: '/diagnostics/no-isolation/*', remove: Object.keys(ISOLATION), add: {} },
+];

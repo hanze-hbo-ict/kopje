@@ -24,6 +24,8 @@ headers, so Java cannot start there.
     runtime frame has an opaque origin; ADR-10); `/`, `/index.html`, `/assets/*`:
     `Cross-Origin-Resource-Policy: same-origin`
   - `/`, `/index.html`: `Cache-Control: no-cache`
+  - `/diagnostics/credentialless/*`: COEP `credentialless` instead of `require-corp`;
+    `/diagnostics/no-isolation/*`: no COOP/COEP (comparison pages of the diagnostics page)
   Without COOP/COEP, Java can't start (no `SharedArrayBuffer`).
 - [ ] MIME types: `.wasm` `application/wasm`, `.mjs`/`.js` JavaScript, `.gz` served as-is
   (**no** `Content-Encoding: gzip`; the runtime decompresses these files itself).
@@ -105,3 +107,17 @@ npm run test:e2e              # test build + all e2e suites in Chromium, Firefox
 3. Check the OpenJDK update version (`make/conf/version-numbers.conf`) and adjust the
    Temurin version and checksum in `scripts/build-runtime-source.sh` to match.
 4. Rebuild, run all tests, `npm run verify:dist`, update `runtime.lock.json` deliberately.
+
+## Diagnostics page
+
+`/diagnostics/` is a static diagnostics page for environments where Java does not start, for
+example an exam shell that is not cross-origin isolated. Someone opens it there, presses
+**Run all variants** and sends back the JSON report. It measures the browser (including the
+Electron/Chromium version), the headers as received, workers, `SharedArrayBuffer`, a blocking
+`Atomics.wait`, WebAssembly and service workers, under Kopje's own headers and on comparison
+pages with `COEP: credentialless` and without isolation headers (`DIAGNOSTICS_RULES` in
+`security-headers.mjs`). It goes further than the boot error's isolation facts
+(`src/runtime/environment.ts`). It was copied from [Klode](https://github.com/hanze-hbo-ict/klode)
+and now belongs to Kopje; see `public/diagnostics/README.md`. `vite preview` and
+`scripts/serve.mjs` send the normal headers everywhere, so the comparison pages only differ on
+the host. After deploying, check them with `curl -sI <origin>/diagnostics/credentialless/`.
